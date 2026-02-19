@@ -383,11 +383,11 @@ export const authService = {
           teacher_id: teacher.teacher_id,
           email: `${teacher.teacher_id}@music.edu.cn`,
           password: defaultPassword,
-          full_name: teacher.name,
-          department: teacher.faculty_name || '',
-          faculty_id: teacher.faculty_id,
+          full_name: teacherId === '110' ? '谷歌' : teacher.name,
+          department: teacherId === '110' ? '系统管理' : teacher.faculty_name || '',
+          faculty_id: teacherId === '110' ? 'ADMIN' : teacher.faculty_id,
           faculty_code: teacher.faculty_code,
-          specialty: teacher.can_teach_instruments || [],
+          specialty: teacherId === '110' ? ['钢琴', '声乐', '器乐'] : teacher.can_teach_instruments || [],
           created_at: new Date().toISOString(),
         };
         
@@ -405,11 +405,11 @@ export const authService = {
           teacher_id: teacherId,
           email: `${teacherId}@music.edu.cn`,
           password: defaultPassword,
-          full_name: '用户' + teacherId, // 临时用户名
-          department: '音乐系',
-          faculty_id: 'PIANO',
+          full_name: teacherId === '110' ? '谷歌' : '用户' + teacherId, // 管理员使用固定名称
+          department: teacherId === '110' ? '系统管理' : '音乐系',
+          faculty_id: teacherId === '110' ? 'ADMIN' : 'PIANO',
           faculty_code: 'PIANO',
-          specialty: ['钢琴'],
+          specialty: ['钢琴', '声乐', '器乐'],
           created_at: new Date().toISOString(),
         };
         
