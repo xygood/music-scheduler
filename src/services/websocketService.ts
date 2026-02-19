@@ -7,7 +7,7 @@ class WebSocketService {
   private isConnected = false;
 
   // 初始化WebSocket连接
-  connect(url: string = 'http://localhost:3001'): Promise<boolean> {
+  connect(url: string = 'http://47.122.118.106:3001'): Promise<boolean> {
     return new Promise((resolve) => {
       try {
         this.socket = io(url, {
