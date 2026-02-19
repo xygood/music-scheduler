@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>检查禁排时段数据</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        h2 {
+            color: #555;
+            margin-top: 30px;
+        }
+        pre {
+            background-color: #f8f8f8;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .slot-item {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .slot-item h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .slot-item p {
+            margin: 5px 0;
+        }
+        .back-link {
+            display: inline-block;
+            margin: 20px 0;
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+        .back-link:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>检查禁排时段数据</h1>
+        
+        <h2>1. 所有禁排时段</h2>
+        <pre id="blockedSlotsData"></pre>
+        
+        <h2>2. 禁排时段详情</h2>
+        <div id="blockedSlotsList"></div>
+        
+        <h2>3. 存储键检查</h2>
+        <pre id="storageKeys"></pre>
+        
+        <a href="check-local-storage.html" class="back-link">返回检查工具</a>
+    </div>
+    
+    <script>
+        // 检查 LocalStorage 中的禁排时段数据
+        function checkBlockedSlots() {
+            // 获取所有禁排时段
+            const blockedSlots = localStorage.getItem('music_scheduler_blocked_slots');
+            const blockedSlotsData = document.getElementById('blockedSlotsData');
+            const blockedSlotsList = document.getElementById('blockedSlotsList');
+            const storageKeys = document.getElementById('storageKeys');
+            
+            if (blockedSlots) {
+                blockedSlotsData.textContent = blockedSlots;
+                
+                // 解析并显示禁排时段详情
+                const slots = JSON.parse(blockedSlots);
+                slots.forEach((slot, index) => {
+                    const slotItem = document.createElement('div');
+                    slotItem.className = 'slot-item';
+                    slotItem.innerHTML = `
+                        <h3>禁排时段 ${index + 1}</h3>
+                        <p><strong>ID:</strong> ${slot.id}</p>
+                        <p><strong>学期:</strong> ${slot.semester_label}</p>
+                        <p><strong>类型:</strong> ${slot.type}</p>
+                        <p><strong>周次:</strong> ${slot.week_number}</p>
+                        <p><strong>星期:</strong> ${slot.day_of_week}</p>
+                        <p><strong>开始节次:</strong> ${slot.start_period}</p>
+                        <p><strong>结束节次:</strong> ${slot.end_period}</p>
+                        <p><strong>原因:</strong> ${slot.reason}</p>
+                        <p><strong>创建时间:</strong> ${slot.created_at}</p>
+                        <p><strong>班级关联:</strong> ${slot.class_associations ? JSON.stringify(slot.class_associations) : '无'}</p>
+                        <p><strong>特定周次:</strong> ${slot.specific_week_days ? JSON.stringify(slot.specific_week_days) : '无'}</p>
+                    `;
+                    blockedSlotsList.appendChild(slotItem);
+                });
+            } else {
+                blockedSlotsData.textContent = '没有禁排时段数据';
+                blockedSlotsList.innerHTML = '<p>没有禁排时段数据</p>';
+            }
+            
+            // 检查所有存储键
+            const keys = Object.keys(localStorage);
+            let keysText = '存储键列表:\n';
+            keys.forEach(key => {
+                keysText += `- ${key}\n`;
+            });
+            storageKeys.textContent = keysText;
+        }
+        
+        // 页面加载时检查
+        window.onload = checkBlockedSlots;
+    </script>
+</body>
+</html>
