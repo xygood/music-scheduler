@@ -453,9 +453,9 @@ export default function MajorClassSchedule() {
       
       blockedTimeMap.forEach((value, key) => {
         // 对周次进行排序和去重
-        const sortedWeeks = [...new Set(value.weeks)].sort((a, b) => a - b);
+        const sortedWeeks = [...new Set(value.weeks)].sort((a, b) => Number(a) - Number(b));
         // 对节次进行排序和去重
-        const sortedPeriods = [...new Set(value.periods)].sort((a, b) => a - b);
+        const sortedPeriods = [...new Set(value.periods)].sort((a, b) => Number(a) - Number(b));
         
         // 为班级创建禁排记录
         newBlockedTimes.push({
@@ -554,9 +554,9 @@ export default function MajorClassSchedule() {
       
       scheduleMap.forEach((value, key) => {
         // 对周次进行排序和去重
-        const sortedWeeks = [...new Set(value.weeks)].sort((a, b) => a - b);
+        const sortedWeeks = [...new Set(value.weeks)].sort((a, b) => Number(a) - Number(b));
         // 对节次进行排序和去重
-        const sortedPeriods = [...new Set(value.periods)].sort((a, b) => a - b);
+        const sortedPeriods = [...new Set(value.periods)].sort((a, b) => Number(a) - Number(b));
         
         if (sortedWeeks.length > 0 && sortedPeriods.length > 0) {
           newBlockedTimes.push({
