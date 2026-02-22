@@ -78,7 +78,7 @@ const TeacherStudentStats: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   
   // 获取唯一班级列表
-  const uniqueClasses = [...new Set(students.map(s => s.class_name).filter(Boolean))].sort();
+  const uniqueClasses = [...new Set(students.map(s => s.major_class || s.class_name).filter(Boolean))].sort();
   
   // 获取唯一教研室列表
   const uniqueFaculties = [...new Set(teachers.map(t => t.faculty_name).filter(Boolean))].sort();
@@ -118,7 +118,7 @@ const TeacherStudentStats: React.FC = () => {
       // 按班级分组统计主项学生
       students.forEach(student => {
         if (student.assigned_teachers?.primary_teacher_id === teacher.id) {
-          const className = student.class_name || '未知班级';
+          const className = student.major_class || student.class_name || '未知班级';
           if (!primaryStats[className]) {
             primaryStats[className] = [{ class_name: className, students: [] }];
           }
@@ -128,7 +128,7 @@ const TeacherStudentStats: React.FC = () => {
         
         // 统计副项学生 - 按人次统计，每个副项分配都单独计数
         if (student.assigned_teachers?.secondary1_teacher_id === teacher.id) {
-          const className = student.class_name || '未知班级';
+          const className = student.major_class || student.class_name || '未知班级';
           if (!secondaryStats[className]) {
             secondaryStats[className] = [{ class_name: className, students: [] }];
           }
@@ -141,7 +141,7 @@ const TeacherStudentStats: React.FC = () => {
           totalSecondaryStudents++;
         }
         if (student.assigned_teachers?.secondary2_teacher_id === teacher.id) {
-          const className = student.class_name || '未知班级';
+          const className = student.major_class || student.class_name || '未知班级';
           if (!secondaryStats[className]) {
             secondaryStats[className] = [{ class_name: className, students: [] }];
           }
@@ -154,7 +154,7 @@ const TeacherStudentStats: React.FC = () => {
           totalSecondaryStudents++;
         }
         if (student.assigned_teachers?.secondary3_teacher_id === teacher.id) {
-          const className = student.class_name || '未知班级';
+          const className = student.major_class || student.class_name || '未知班级';
           if (!secondaryStats[className]) {
             secondaryStats[className] = [{ class_name: className, students: [] }];
           }
@@ -496,15 +496,15 @@ const TeacherStudentStats: React.FC = () => {
                                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         {classStats[0].students.map(student => (
                                           <div key={student.id} className="flex items-center gap-3 p-3 bg-white rounded-lg hover:bg-blue-100 transition-colors border border-blue-100">
-                                            <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
+                                            <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
                                               {student.name.charAt(0)}
                                             </div>
-                                            <div className="flex-1">
+                                            <div className="flex-1 min-w-0">
                                               <p className="font-medium text-gray-900">{student.name}</p>
                                               <p className="text-xs text-gray-600">{student.student_id}</p>
                                             </div>
-                                            <div>
-                                              <span className="px-2 py-1 bg-blue-500 text-white rounded-full text-xs font-medium">
+                                            <div className="flex-shrink-0">
+                                              <span className="px-2 py-1 bg-blue-500 text-white rounded-full text-xs font-medium whitespace-nowrap">
                                                 {student.primary_instrument || student.instrument}
                                               </span>
                                             </div>
@@ -568,15 +568,15 @@ const TeacherStudentStats: React.FC = () => {
                                           
                                           return (
                                             <div key={studentKey} className="flex items-center gap-3 p-3 bg-white rounded-lg hover:bg-green-100 transition-colors border border-green-100">
-                                              <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white font-bold">
+                                              <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
                                                 {student.name.charAt(0)}
                                               </div>
-                                              <div className="flex-1">
+                                              <div className="flex-1 min-w-0">
                                                 <p className="font-medium text-gray-900">{student.name}</p>
                                                 <p className="text-xs text-gray-600">{student.student_id}</p>
                                               </div>
-                                              <div>
-                                                <span className="px-2 py-1 bg-green-500 text-white rounded-full text-xs font-medium">
+                                              <div className="flex-shrink-0">
+                                                <span className="px-2 py-1 bg-green-500 text-white rounded-full text-xs font-medium whitespace-nowrap">
                                                   {secondaryType}
                                                 </span>
                                               </div>

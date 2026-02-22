@@ -6,7 +6,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../services/supabase';
-import { courseService, studentService, scheduleService, teacherService, roomService, classService, largeClassScheduleService, blockedSlotService } from '../services';
+import { courseService, studentService, scheduleService, teacherService, roomService, classService, largeClassScheduleService, blockedSlotService, weekConfigService } from '../services';
 import websocketService from '../services/websocketService';
 import { calculateSemesterNumber, getCoursesForClass } from '../utils/courseAssignment';
 import { v4 as uuidv4 } from 'uuid';
@@ -114,8 +114,9 @@ export default function ArrangeClass() {
   const [availableTeachers, setAvailableTeachers] = useState<Teacher[]>([]);
 
   // 辅助函数：获取有效的教师ID（优先使用teacher，其次使用user）
+  // 注意：这里返回的是教师工号（teacher_id），用于匹配 scheduled_classes.teacher_id
   const getEffectiveTeacherId = useCallback(() => {
-    return targetTeacher?.id || teacher?.id || user?.id;
+    return targetTeacher?.teacher_id || teacher?.teacher_id || user?.teacher_id;
   }, [targetTeacher, teacher, user]);
 
   // 辅助函数：获取有效的教师工号（优先使用teacher，其次使用user）
@@ -187,6 +188,7 @@ export default function ArrangeClass() {
   const [selectedCourseType, setSelectedCourseType] = useState<'钢琴' | '声乐' | '器乐'>('器乐');
   const [selectedCourseName, setSelectedCourseName] = useState<string>('');
   const [selectedCourseId, setSelectedCourseId] = useState<string>('');
+  const [selectedCourseClassId, setSelectedCourseClassId] = useState<string>('');
   // 教室选择状态
   const [selectedRoom, setSelectedRoom] = useState<string>('');
   // 当前小组的主要专业类型
@@ -858,7 +860,7 @@ export default function ArrangeClass() {
     }
 
     // 检查教师已经排定的时间
-    const effectiveTeacherId = targetTeacher?.id || teacher?.id;
+    const effectiveTeacherId = targetTeacher?.teacher_id || teacher?.teacher_id;
     if (effectiveTeacherId) {
       const teacherSchedule = scheduledClasses.find(sc => {
         if (sc.teacher_id !== effectiveTeacherId) return false;
@@ -1240,7 +1242,7 @@ export default function ArrangeClass() {
     );
 
     // 防止与其他教师的课程冲突
-    const effectiveTeacherId = targetTeacher?.id || teacher?.id || user?.id;
+    const effectiveTeacherId = targetTeacher?.teacher_id || teacher?.teacher_id || user?.teacher_id;
     if (effectiveTeacherId) {
       const hasTeacherConflict = scheduledClasses.some(
         sc => sc.teacher_id === effectiveTeacherId &&
@@ -1421,8 +1423,11 @@ export default function ArrangeClass() {
         return;
       }
       
-      // 获取班级信息
-      let classId = selectedClass?.class_id;
+      // 获取班级信息 - 优先使用当前排课信息中选中的班级ID
+      let classId = selectedCourseClassId;
+      if (!classId) {
+        classId = selectedClass?.class_id;
+      }
       if (!classId && groupStudents.length > 0) {
         // 从选中的学生中获取班级信息
         classId = groupStudents[0].major_class;
@@ -1530,15 +1535,20 @@ export default function ArrangeClass() {
       }
 
       // 获取或创建课程
-      // 优先检查课程编号是否已存在（不管任课教师是否相同）
+      // 课程编号 + 班级 必须同时匹配才能使用已有课程
       let course = null;
       
-      if (selectedCourseId) {
-        // 如果有选中的课程编号，先查找该课程编号是否已存在
+      if (selectedCourseId && classId) {
+        // 如果有选中的课程编号和班级，必须同时匹配课程编号和班级
+        course = allCourses.find(c => 
+          (c as any).course_id === selectedCourseId && c.major_class === classId
+        );
+      } else if (selectedCourseId) {
+        // 如果只有课程编号没有班级，只匹配课程编号
         course = allCourses.find(c => (c as any).course_id === selectedCourseId);
       }
       
-      // 如果课程编号不存在，再按课程名称和班级查找
+      // 如果课程编号+班级不存在，再按课程名称和班级查找
       if (!course) {
         course = allCourses.find(c => {
           // 首先匹配课程名称
@@ -1753,105 +1763,87 @@ export default function ArrangeClass() {
         const targetStudentsData: any[] = [];
         
         allStudentsData.forEach(s => {
-          // 检查学生是否与当前教师有关联
-          const isTeacherMatch = (
-            // 直接匹配 teacher_id（主项）
+          // 分别检查主项教师和副项教师匹配
+          // 1. 检查是否为主项教师
+          const isPrimaryTeacherMatch = (
             s.teacher_id === effectiveTeacherId ||
-            // 尝试通过教师姓名匹配（主项）
             (targetTeacher && s.teacher_name === targetTeacher.name) ||
-            // 尝试通过教师工号匹配（主项）
             (targetTeacher && s.teacher_id === targetTeacher.teacher_id) ||
-            // 匹配主项教师（通过assigned_teachers）
             (s.assigned_teachers && (
-              // 尝试匹配教师ID
               s.assigned_teachers.primary_teacher_id === effectiveTeacherId ||
-              // 尝试匹配教师工号
-              (targetTeacher && s.assigned_teachers.primary_teacher_id === targetTeacher.teacher_id) ||
-              // 匹配副项教师（副项1、副项2、副项3）
-              // 尝试匹配教师ID
-              s.assigned_teachers.secondary1_teacher_id === effectiveTeacherId ||
-              s.assigned_teachers.secondary2_teacher_id === effectiveTeacherId ||
-              s.assigned_teachers.secondary3_teacher_id === effectiveTeacherId ||
-              // 尝试匹配教师工号
-              (targetTeacher && (
-                s.assigned_teachers.secondary1_teacher_id === targetTeacher.teacher_id ||
-                s.assigned_teachers.secondary2_teacher_id === targetTeacher.teacher_id ||
-                s.assigned_teachers.secondary3_teacher_id === targetTeacher.teacher_id
-              ))
+              (targetTeacher && s.assigned_teachers.primary_teacher_id === targetTeacher.teacher_id)
             ))
           );
           
-          if (isTeacherMatch) {
-            // 为每个课程类型创建学生实例
-            // 1. 主项课程
-            if (s.primary_instrument) {
-              targetStudentsData.push({
-                ...s,
-                __courseType: s.primary_instrument,
-                __source: 'primary'
-              });
-            }
-            
-            // 2. 副项课程
-            if (s.secondary_instruments && s.secondary_instruments.length > 0) {
-              // 检查每个副项是否由当前教师教授
-              s.secondary_instruments.forEach((instrument: string, index: number) => {
-                // 检查副项教师是否为当前教师
-                let isSecondaryTeacherMatch = false;
-                
-                // 根据索引检查对应的副项教师
-                switch (index) {
-                  case 0:
-                    // 检查副项1教师
-                    if (s.assigned_teachers?.secondary1_teacher_id === effectiveTeacherId ||
-                        (targetTeacher && s.assigned_teachers?.secondary1_teacher_id === targetTeacher.teacher_id)) {
-                      isSecondaryTeacherMatch = true;
-                    }
-                    break;
-                  case 1:
-                    // 检查副项2教师
-                    if (s.assigned_teachers?.secondary2_teacher_id === effectiveTeacherId ||
-                        (targetTeacher && s.assigned_teachers?.secondary2_teacher_id === targetTeacher.teacher_id)) {
-                      isSecondaryTeacherMatch = true;
-                    }
-                    break;
-                  case 2:
-                    // 检查副项3教师
-                    if (s.assigned_teachers?.secondary3_teacher_id === effectiveTeacherId ||
-                        (targetTeacher && s.assigned_teachers?.secondary3_teacher_id === targetTeacher.teacher_id)) {
-                      isSecondaryTeacherMatch = true;
-                    }
-                    break;
-                }
-                
-                // 只有当副项教师是当前教师时，才创建学生实例
-                if (isSecondaryTeacherMatch) {
-                  targetStudentsData.push({
-                    ...s,
-                    __courseType: instrument,
-                    __source: 'secondary'
-                  });
-                }
-              });
-            } else if (s.secondary_instrument1) {
-              // 兼容旧格式
+          // 2. 检查是否为副项教师
+          const isSecondaryTeacherMatch = s.assigned_teachers && (
+            s.assigned_teachers.secondary1_teacher_id === effectiveTeacherId ||
+            s.assigned_teachers.secondary2_teacher_id === effectiveTeacherId ||
+            s.assigned_teachers.secondary3_teacher_id === effectiveTeacherId ||
+            (targetTeacher && (
+              s.assigned_teachers.secondary1_teacher_id === targetTeacher.teacher_id ||
+              s.assigned_teachers.secondary2_teacher_id === targetTeacher.teacher_id ||
+              s.assigned_teachers.secondary3_teacher_id === targetTeacher.teacher_id
+            ))
+          );
+          
+          // 1. 主项课程：只有当教师是学生的主项教师时才添加
+          if (isPrimaryTeacherMatch && s.primary_instrument) {
+            targetStudentsData.push({
+              ...s,
+              __courseType: s.primary_instrument,
+              __source: 'primary'
+            });
+          }
+          
+          // 2. 副项课程：只有当教师是学生的副项教师时才添加
+          if (isSecondaryTeacherMatch && s.secondary_instruments && s.secondary_instruments.length > 0) {
+            // 检查每个副项是否由当前教师教授
+            s.secondary_instruments.forEach((instrument: string, index: number) => {
               // 检查副项教师是否为当前教师
-              let isSecondaryTeacherMatch = false;
+              let isThisSecondaryTeacherMatch = false;
               
-              // 检查副项1教师
-              if (s.assigned_teachers?.secondary1_teacher_id === effectiveTeacherId ||
-                  (targetTeacher && s.assigned_teachers?.secondary1_teacher_id === targetTeacher.teacher_id)) {
-                isSecondaryTeacherMatch = true;
+              // 根据索引检查对应的副项教师
+              switch (index) {
+                case 0:
+                  if (s.assigned_teachers?.secondary1_teacher_id === effectiveTeacherId ||
+                      (targetTeacher && s.assigned_teachers?.secondary1_teacher_id === targetTeacher.teacher_id)) {
+                    isThisSecondaryTeacherMatch = true;
+                  }
+                  break;
+                case 1:
+                  if (s.assigned_teachers?.secondary2_teacher_id === effectiveTeacherId ||
+                      (targetTeacher && s.assigned_teachers?.secondary2_teacher_id === targetTeacher.teacher_id)) {
+                    isThisSecondaryTeacherMatch = true;
+                  }
+                  break;
+                case 2:
+                  if (s.assigned_teachers?.secondary3_teacher_id === effectiveTeacherId ||
+                      (targetTeacher && s.assigned_teachers?.secondary3_teacher_id === targetTeacher.teacher_id)) {
+                    isThisSecondaryTeacherMatch = true;
+                  }
+                  break;
               }
               
               // 只有当副项教师是当前教师时，才创建学生实例
-              if (isSecondaryTeacherMatch) {
+              if (isThisSecondaryTeacherMatch) {
                 targetStudentsData.push({
                   ...s,
-                  __courseType: s.secondary_instrument1,
+                  __courseType: instrument,
                   __source: 'secondary'
                 });
               }
+            });
+          } else if (isSecondaryTeacherMatch && s.secondary_instrument1) {
+            // 兼容旧格式
+            // 检查副项1教师是否为当前教师
+            if (s.assigned_teachers?.secondary1_teacher_id === effectiveTeacherId ||
+                (targetTeacher && s.assigned_teachers?.secondary1_teacher_id === targetTeacher.teacher_id)) {
+              targetStudentsData.push({
+                ...s,
+                __courseType: s.secondary_instrument1,
+                __source: 'secondary'
+              });
             }
           }
         });
@@ -2059,7 +2051,7 @@ export default function ArrangeClass() {
     const studentsToAdd = [];
     
     // 获取当前教师信息
-    const effectiveTeacherId = targetTeacher?.id || teacher?.id;
+    const effectiveTeacherId = targetTeacher?.teacher_id || teacher?.teacher_id;
     const effectiveTeacherNumber = targetTeacher?.teacher_id || teacher?.teacher_id;
     const effectiveTeacherName = targetTeacher?.name || teacher?.name;
     
@@ -2502,10 +2494,8 @@ export default function ArrangeClass() {
       
       // 设置目标教师（只在 targetTeacher 为 null 时设置，避免死循环）
       if (isAdmin) {
-        // 管理员：如果没有选择目标教师，默认选择自己
-        if (!targetTeacher && teacher) {
-          setTargetTeacher(teacher);
-        }
+        // 管理员：不自动设置目标教师，需要手动选择
+        // 保持 targetTeacher 为 null，等管理员手动选择教师后再加载学生数据
       } else {
         // 教师：目标教师只能是自己
         // 只在 targetTeacher 为 null 时设置，避免重复设置导致的死循环
@@ -2635,9 +2625,17 @@ export default function ArrangeClass() {
         const totalTasks = 11; // 获取学生数据 + 同步班级 + 获取所有数据 + 筛选小组课 + 过滤学生 + 过滤排课 + 获取琴房配置 + 获取周次配置 + 计算已排完的学生状态 + 转换显示格式 + 初始化时间网格
         let completedTasks = 0;
 
-        // 首先获取学生数据进行班级同步
+        // 确定是否需要加载学生数据
+        // 管理员需要先选择教师才加载学生数据，非管理员直接加载
+        const effectiveTeacherId = targetTeacher?.id || teacher?.id;
+        const shouldLoadStudents = !isAdmin || effectiveTeacherId;
+        
+        // 获取学生数据（仅在需要时加载）
         updateProgress(completedTasks, totalTasks);
-        const allStudentsData = await studentService.getAll();
+        let allStudentsData: any[] = [];
+        if (shouldLoadStudents) {
+          allStudentsData = await studentService.getAll();
+        }
         if (isCancelled) return;
         completedTasks++;
         updateProgress(completedTasks, totalTasks);
@@ -2695,7 +2693,7 @@ export default function ArrangeClass() {
               const isGroupCourse = (course as any).teaching_type === '小组课';
               
               // 根据教师的教研室过滤课程
-              const effectiveTeacherId = targetTeacher?.id || teacher?.id;
+              const effectiveTeacherId = targetTeacher?.teacher_id || teacher?.teacher_id;
               if (effectiveTeacherId) {
                 // 获取教师的教研室代码（使用faculty_id字段，这是教师数据中存储教研室信息的正确字段）
                 const teacherFacultyId = targetTeacher?.faculty_id || teacher?.faculty_id;
@@ -2788,7 +2786,7 @@ export default function ArrangeClass() {
         setRooms(allRooms || []); // 设置所有房间数据
         
         // 根据目标教师过滤数据
-        const effectiveTeacherId = targetTeacher?.id || teacher?.id;
+        // effectiveTeacherId 已在上面定义
 
         
         if (effectiveTeacherId) {
@@ -2824,77 +2822,87 @@ export default function ArrangeClass() {
               ))
             );
             
-            if (isTeacherMatch) {
-              // 为每个课程类型创建学生实例
-              // 1. 主项课程
-              if (s.primary_instrument) {
-                targetStudentsData.push({
-                  ...s,
-                  __courseType: s.primary_instrument,
-                  __source: 'primary'
-                });
-              }
-              
-              // 2. 副项课程
-              if (s.secondary_instruments && s.secondary_instruments.length > 0) {
-                // 检查每个副项是否由当前教师教授
-                s.secondary_instruments.forEach((instrument: string, index: number) => {
-                  // 检查副项教师是否为当前教师
-                  let isSecondaryTeacherMatch = false;
-                  
-                  // 根据索引检查对应的副项教师
-                  switch (index) {
-                    case 0:
-                      // 检查副项1教师
-                      if (s.assigned_teachers?.secondary1_teacher_id === effectiveTeacherId ||
-                          (targetTeacher && s.assigned_teachers?.secondary1_teacher_id === targetTeacher.teacher_id)) {
-                        isSecondaryTeacherMatch = true;
-                      }
-                      break;
-                    case 1:
-                      // 检查副项2教师
-                      if (s.assigned_teachers?.secondary2_teacher_id === effectiveTeacherId ||
-                          (targetTeacher && s.assigned_teachers?.secondary2_teacher_id === targetTeacher.teacher_id)) {
-                        isSecondaryTeacherMatch = true;
-                      }
-                      break;
-                    case 2:
-                      // 检查副项3教师
-                      if (s.assigned_teachers?.secondary3_teacher_id === effectiveTeacherId ||
-                          (targetTeacher && s.assigned_teachers?.secondary3_teacher_id === targetTeacher.teacher_id)) {
-                        isSecondaryTeacherMatch = true;
-                      }
-                      break;
-                  }
-                  
-                  // 只有当副项教师是当前教师时，才创建学生实例
-                  if (isSecondaryTeacherMatch) {
-                    targetStudentsData.push({
-                      ...s,
-                      __courseType: instrument,
-                      __source: 'secondary'
-                    });
-                  }
-                });
-              } else if (s.secondary_instrument1) {
-                // 兼容旧格式
+            // 分别检查主项教师和副项教师匹配
+            // 1. 检查是否为主项教师
+            const isPrimaryTeacherMatch = (
+              s.teacher_id === effectiveTeacherId ||
+              (targetTeacher && s.teacher_name === targetTeacher.name) ||
+              (targetTeacher && s.teacher_id === targetTeacher.teacher_id) ||
+              (s.assigned_teachers && (
+                s.assigned_teachers.primary_teacher_id === effectiveTeacherId ||
+                (targetTeacher && s.assigned_teachers.primary_teacher_id === targetTeacher.teacher_id)
+              ))
+            );
+            
+            // 2. 检查是否为副项教师
+            const isSecondaryTeacherMatch = s.assigned_teachers && (
+              s.assigned_teachers.secondary1_teacher_id === effectiveTeacherId ||
+              s.assigned_teachers.secondary2_teacher_id === effectiveTeacherId ||
+              s.assigned_teachers.secondary3_teacher_id === effectiveTeacherId ||
+              (targetTeacher && (
+                s.assigned_teachers.secondary1_teacher_id === targetTeacher.teacher_id ||
+                s.assigned_teachers.secondary2_teacher_id === targetTeacher.teacher_id ||
+                s.assigned_teachers.secondary3_teacher_id === targetTeacher.teacher_id
+              ))
+            );
+            
+            // 1. 主项课程：只有当教师是学生的主项教师时才添加
+            if (isPrimaryTeacherMatch && s.primary_instrument) {
+              targetStudentsData.push({
+                ...s,
+                __courseType: s.primary_instrument,
+                __source: 'primary'
+              });
+            }
+            
+            // 2. 副项课程：只有当教师是学生的副项教师时才添加
+            if (isSecondaryTeacherMatch && s.secondary_instruments && s.secondary_instruments.length > 0) {
+              // 检查每个副项是否由当前教师教授
+              s.secondary_instruments.forEach((instrument: string, index: number) => {
                 // 检查副项教师是否为当前教师
-                let isSecondaryTeacherMatch = false;
+                let isThisSecondaryTeacherMatch = false;
                 
-                // 检查副项1教师
-                if (s.assigned_teachers?.secondary1_teacher_id === effectiveTeacherId ||
-                    (targetTeacher && s.assigned_teachers?.secondary1_teacher_id === targetTeacher.teacher_id)) {
-                  isSecondaryTeacherMatch = true;
+                // 根据索引检查对应的副项教师
+                switch (index) {
+                  case 0:
+                    if (s.assigned_teachers?.secondary1_teacher_id === effectiveTeacherId ||
+                        (targetTeacher && s.assigned_teachers?.secondary1_teacher_id === targetTeacher.teacher_id)) {
+                      isThisSecondaryTeacherMatch = true;
+                    }
+                    break;
+                  case 1:
+                    if (s.assigned_teachers?.secondary2_teacher_id === effectiveTeacherId ||
+                        (targetTeacher && s.assigned_teachers?.secondary2_teacher_id === targetTeacher.teacher_id)) {
+                      isThisSecondaryTeacherMatch = true;
+                    }
+                    break;
+                  case 2:
+                    if (s.assigned_teachers?.secondary3_teacher_id === effectiveTeacherId ||
+                        (targetTeacher && s.assigned_teachers?.secondary3_teacher_id === targetTeacher.teacher_id)) {
+                      isThisSecondaryTeacherMatch = true;
+                    }
+                    break;
                 }
                 
                 // 只有当副项教师是当前教师时，才创建学生实例
-                if (isSecondaryTeacherMatch) {
+                if (isThisSecondaryTeacherMatch) {
                   targetStudentsData.push({
                     ...s,
-                    __courseType: s.secondary_instrument1,
+                    __courseType: instrument,
                     __source: 'secondary'
                   });
                 }
+              });
+            } else if (isSecondaryTeacherMatch && s.secondary_instrument1) {
+              // 兼容旧格式
+              // 检查副项1教师是否为当前教师
+              if (s.assigned_teachers?.secondary1_teacher_id === effectiveTeacherId ||
+                  (targetTeacher && s.assigned_teachers?.secondary1_teacher_id === targetTeacher.teacher_id)) {
+                targetStudentsData.push({
+                  ...s,
+                  __courseType: s.secondary_instrument1,
+                  __source: 'secondary'
+                });
               }
             }
         });
@@ -2908,8 +2916,8 @@ export default function ArrangeClass() {
           // 同时过滤掉专业大课（理论课），只显示专业小课
           let filteredScheduleData = scheduleData;
           
-          // 如果不是管理员，只能查看自己的排课
-          if (!isAdmin) {
+          // 如果选择了目标教师，只显示该教师的排课（管理员选择教师后也只显示该教师的排课）
+          if (effectiveTeacherId) {
             filteredScheduleData = filteredScheduleData.filter(sc => sc.teacher_id === effectiveTeacherId);
           }
           
@@ -3016,113 +3024,25 @@ export default function ArrangeClass() {
 
         // 获取学期周次配置
         try {
-          // 尝试从localStorage获取学期周次配置
-          // 尝试多种可能的键名，包括正确的键名'music_scheduler_semester_week_configs'
-          const possibleKeys = ['music_scheduler_semester_week_configs', 'semester_week_configs', 'semester_configs', 'term_configs', 'week_configs'];
-          let weekConfigs = null;
+          const weekConfigData = await weekConfigService.getBySemester(selectedSemesterLabel);
           
-          for (const key of possibleKeys) {
-            weekConfigs = localStorage.getItem(key);
-            if (weekConfigs) {
-              break;
-            }
-          }
-          
-          if (weekConfigs) {
-            const configs = JSON.parse(weekConfigs);
+          if (weekConfigData) {
+            // 获取总周数
+            let totalWeeksValue = weekConfigData.total_weeks || 16;
+            setTotalWeeks(totalWeeksValue);
             
-            // 标准化配置数据格式
-            const normalizedConfigs = Array.isArray(configs) ? configs : [configs];
+            // 获取开始日期
+            const startDateValue = weekConfigData.start_date || '';
+            setSemesterStartDate(startDateValue);
             
-            // 尝试多种方式查找当前学期的配置
-            let weekConfigData;
-            
-            // 方式1: 直接匹配semester_label
-            if (!weekConfigData) {
-              weekConfigData = normalizedConfigs.find((config: any) => 
-                config.semester_label === selectedSemesterLabel
-              );
-            }
-            
-            // 方式2: 匹配semester字段
-            if (!weekConfigData) {
-              weekConfigData = normalizedConfigs.find((config: any) => 
-                config.semester === selectedSemesterLabel
-              );
-            }
-            
-            // 方式3: 匹配academic_year和semester
-            if (!weekConfigData && selectedSemesterLabel.includes('-')) {
-              const parts = selectedSemesterLabel.split('-');
-              if (parts.length >= 2) {
-                const academicYear = parts[0] + '-' + parts[1];
-                weekConfigData = normalizedConfigs.find((config: any) => 
-                  (config.academic_year === academicYear || config.year === academicYear) && 
-                  (config.semester === selectedSemesterLabel || config.term === selectedSemesterLabel)
-                );
-              }
-            }
-            
-            // 方式4: 直接使用最新的配置
-            if (!weekConfigData && normalizedConfigs.length > 0) {
-              weekConfigData = normalizedConfigs[normalizedConfigs.length - 1];
-            }
-            
-            // 如果找到配置
-            if (weekConfigData) {
-              // 尝试多种方式获取总周数
-              let totalWeeksValue = 16; // 默认值
-              
-              // 尝试多种可能的字段名
-              const weekFields = ['total_weeks', 'weeks', 'totalWeeks', 'weekCount', 'weeksCount'];
-              
-              for (const field of weekFields) {
-                if (weekConfigData[field]) {
-                  // 如果是数字直接使用
-                  if (typeof weekConfigData[field] === 'number') {
-                    totalWeeksValue = weekConfigData[field];
-                    break;
-                  }
-                  // 如果是字符串，尝试解析
-                  else if (typeof weekConfigData[field] === 'string') {
-                    const weekMatch = weekConfigData[field].match(/\d+/);
-                    if (weekMatch) {
-                      totalWeeksValue = parseInt(weekMatch[0]);
-                      break;
-                    }
-                  }
-                }
-              }
-              
-              setTotalWeeks(totalWeeksValue);
-              
-              // 尝试多种可能的开始日期字段名
-              const dateFields = ['start_date', 'startDate', 'start', 'begin_date', 'beginDate'];
-              let startDateValue = '';
-              
-              for (const field of dateFields) {
-                if (weekConfigData[field]) {
-                  startDateValue = weekConfigData[field];
-                  break;
-                }
-              }
-              
-              setSemesterStartDate(startDateValue);
-              setSelectedWeekRange({
-                startWeek: 1,
-                endWeek: totalWeeksValue
-              });
-            } else {
-              console.warn('未找到周次配置，使用默认值');
-              setTotalWeeks(16);
-              setSelectedWeekRange({
-                startWeek: 1,
-                endWeek: 16
-              });
-            }
+            setSelectedWeekRange({
+              startWeek: 1,
+              endWeek: totalWeeksValue
+            });
           } else {
-            console.warn('未找到学期周次配置数据，使用默认值');
+            console.warn('未找到周次配置，使用默认值');
             setTotalWeeks(16);
+            setSemesterStartDate('');
             setSelectedWeekRange({
               startWeek: 1,
               endWeek: 16
@@ -3131,6 +3051,7 @@ export default function ArrangeClass() {
         } catch (weekError) {
           console.warn('获取周次配置失败，使用默认值:', weekError);
           setTotalWeeks(16);
+          setSemesterStartDate('');
           setSelectedWeekRange({
             startWeek: 1,
             endWeek: 16
@@ -3708,7 +3629,7 @@ export default function ArrangeClass() {
     try {
       const conflicts = new Set<number>();
       const allSchedules = await scheduleService.getAll();
-      const effectiveTeacherId = targetTeacher?.id || teacher?.id;
+      const effectiveTeacherId = targetTeacher?.teacher_id || teacher?.teacher_id;
       const blockedSlots = await blockedSlotService.getBySemester(selectedSemesterLabel);
       
       // 检测每个周次是否有冲突
@@ -6332,8 +6253,14 @@ export default function ArrangeClass() {
 
   // 获取排课结果（使用 useMemo 缓存）
   const scheduleResults = React.useMemo(() => {
-    // 优化：使用 Map 存储课程，提高查找效率
+    // 优化：使用 Map 存储课程，提高查找效率（同时支持内部ID和课程编号查找）
     const coursesMap = new Map(courses.map(course => [course.id, course]));
+    // 添加课程编号到映射
+    courses.forEach(course => {
+      if ((course as any).course_id) {
+        coursesMap.set((course as any).course_id, course);
+      }
+    });
     
     // 获取当前教师ID
     const currentTeacherId = targetTeacher?.id || teacher?.id;
@@ -6345,14 +6272,15 @@ export default function ArrangeClass() {
         return false;
       }
       
-      // 检查授课类型是否为专业大课
-      const teachingType = schedule.teaching_type || (schedule.courses?.teaching_type);
+      // 通过 course_id 关联课程数据获取 teaching_type
+      const course = coursesMap.get(schedule.course_id);
+      const teachingType = schedule.teaching_type || (course as any)?.teaching_type;
       if (teachingType === '专业大课') {
         return false;
       }
       
       // 检查课程类型是否为理论课
-      const courseType = schedule.course_type || (schedule.courses?.course_type);
+      const courseType = schedule.course_type || course?.course_type;
       if (courseType === '理论课') {
         return false;
       }
@@ -6383,6 +6311,10 @@ export default function ArrangeClass() {
       let courseName = schedule.course_name || '课程';
       let courseType = schedule.course_type || '器乐';
       
+      // 从课程表中获取正确的课程编号
+      const course = coursesMap.get(schedule.course_id);
+      const courseNumber = course ? (course as any).course_id || schedule.course_id : schedule.course_id;
+      
       const teacherName = schedule.teacher_name || schedule.courses?.teacher_name || schedule.courses?.teacher?.name || (targetTeacher?.name || teacher?.name) || '未知教师';
 
       // 第一步：按"课程+教师+时间（星期+节次）"分组
@@ -6401,7 +6333,7 @@ export default function ArrangeClass() {
       } else {
         // 创建新组
         groups[groupKey] = {
-          courseId: schedule.course_id,
+          courseId: courseNumber,
           courseName: courseName,
           courseType: courseType,
           teacherId: schedule.teacher_id,
@@ -7090,11 +7022,28 @@ export default function ArrangeClass() {
     if (!semesterStartDate) return '';
     
     const startDate = new Date(semesterStartDate);
-    const weekStart = new Date(startDate);
-    weekStart.setDate(startDate.getDate() + (week - 1) * 7);
     
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 6);
+    // 获取某日期所在周的周一
+    const getMonday = (date: Date): Date => {
+      const d = new Date(date);
+      const day = d.getDay();
+      // getDay() 返回 0-6，其中 0 是星期日
+      // 周一为一周的第一天：周日(0)属于上一周
+      const diff = day === 0 ? -6 : 1 - day;
+      d.setDate(d.getDate() + diff);
+      return d;
+    };
+    
+    // 学期开始的周一
+    const startMonday = getMonday(startDate);
+    
+    // 计算目标周的周一
+    const targetMonday = new Date(startMonday);
+    targetMonday.setDate(startMonday.getDate() + (week - 1) * 7);
+    
+    // 计算目标周的周日
+    const targetSunday = new Date(targetMonday);
+    targetSunday.setDate(targetMonday.getDate() + 6);
     
     const formatDate = (date: Date) => {
       const month = (date.getMonth() + 1).toString().padStart(2, '0');
@@ -7102,7 +7051,7 @@ export default function ArrangeClass() {
       return `${month}-${day}`;
     };
     
-    return `${formatDate(weekStart)}~${formatDate(weekEnd)}`;
+    return `${formatDate(targetMonday)}~${formatDate(targetSunday)}`;
   };
 
   // 计算指定周和星期几的具体日期
@@ -7110,11 +7059,26 @@ export default function ArrangeClass() {
     if (!semesterStartDate) return '';
     
     const startDate = new Date(semesterStartDate);
-    const weekStart = new Date(startDate);
-    weekStart.setDate(startDate.getDate() + (week - 1) * 7);
     
-    const targetDate = new Date(weekStart);
-    targetDate.setDate(weekStart.getDate() + (dayOfWeek - 1));
+    // 获取某日期所在周的周一
+    const getMonday = (date: Date): Date => {
+      const d = new Date(date);
+      const day = d.getDay();
+      const diff = day === 0 ? -6 : 1 - day;
+      d.setDate(d.getDate() + diff);
+      return d;
+    };
+    
+    // 学期开始的周一
+    const startMonday = getMonday(startDate);
+    
+    // 计算目标周的周一
+    const targetMonday = new Date(startMonday);
+    targetMonday.setDate(startMonday.getDate() + (week - 1) * 7);
+    
+    // 计算目标日期（周一=1，周日=7）
+    const targetDate = new Date(targetMonday);
+    targetDate.setDate(targetMonday.getDate() + (dayOfWeek - 1));
     
     const month = (targetDate.getMonth() + 1).toString().padStart(2, '0');
     const day = targetDate.getDate().toString().padStart(2, '0');
@@ -8640,118 +8604,23 @@ export default function ArrangeClass() {
     
     // 更新周次配置
     try {
-      // 尝试从localStorage获取学期周次配置
-      // 尝试多种可能的键名，包括正确的键名'music_scheduler_semester_week_configs'
-      const possibleKeys = ['music_scheduler_semester_week_configs', 'semester_week_configs', 'semester_configs', 'term_configs', 'week_configs'];
-      let weekConfigs = null;
+      const weekConfigData = await weekConfigService.getBySemester(semesterLabel);
       
-      for (const key of possibleKeys) {
-        weekConfigs = localStorage.getItem(key);
-        if (weekConfigs) {
-
-          break;
-        }
-      }
-      
-      if (weekConfigs) {
-        const configs = JSON.parse(weekConfigs);
-
+      if (weekConfigData) {
+        const totalWeeksValue = weekConfigData.total_weeks || 16;
+        setTotalWeeks(totalWeeksValue);
         
-        // 标准化配置数据格式
-        const normalizedConfigs = Array.isArray(configs) ? configs : [configs];
+        const startDateValue = weekConfigData.start_date || '';
+        setSemesterStartDate(startDateValue);
         
-        // 尝试多种方式查找当前学期的配置
-        let weekConfigData;
-        
-        // 方式1: 直接匹配semester_label
-        if (!weekConfigData) {
-          weekConfigData = normalizedConfigs.find((config: any) => 
-            config.semester_label === semesterLabel
-          );
-        }
-        
-        // 方式2: 匹配semester字段
-        if (!weekConfigData) {
-          weekConfigData = normalizedConfigs.find((config: any) => 
-            config.semester === semesterLabel
-          );
-        }
-        
-        // 方式3: 匹配academic_year和semester
-        if (!weekConfigData && semesterLabel.includes('-')) {
-          const parts = semesterLabel.split('-');
-          if (parts.length >= 2) {
-            const academicYear = parts[0] + '-' + parts[1];
-            weekConfigData = normalizedConfigs.find((config: any) => 
-              (config.academic_year === academicYear || config.year === academicYear) && 
-              (config.semester === semesterLabel || config.term === semesterLabel)
-            );
-          }
-        }
-        
-        // 方式4: 直接使用最新的配置
-        if (!weekConfigData && normalizedConfigs.length > 0) {
-          weekConfigData = normalizedConfigs[normalizedConfigs.length - 1];
-
-        }
-        
-        // 如果找到配置
-        if (weekConfigData) {
-
-          // 尝试多种方式获取总周数
-          let totalWeeksValue = 16; // 默认值
-          
-          // 尝试多种可能的字段名
-          const weekFields = ['total_weeks', 'weeks', 'totalWeeks', 'weekCount', 'weeksCount'];
-          
-          for (const field of weekFields) {
-            if (weekConfigData[field]) {
-              // 如果是数字直接使用
-              if (typeof weekConfigData[field] === 'number') {
-                totalWeeksValue = weekConfigData[field];
-                break;
-              }
-              // 如果是字符串，尝试解析
-              else if (typeof weekConfigData[field] === 'string') {
-                const weekMatch = weekConfigData[field].match(/\d+/);
-                if (weekMatch) {
-                  totalWeeksValue = parseInt(weekMatch[0]);
-                  break;
-                }
-              }
-            }
-          }
-          
-
-          setTotalWeeks(totalWeeksValue);
-          
-          // 尝试多种可能的开始日期字段名
-          const dateFields = ['start_date', 'startDate', 'start', 'begin_date', 'beginDate'];
-          let startDateValue = '';
-          
-          for (const field of dateFields) {
-            if (weekConfigData[field]) {
-              startDateValue = weekConfigData[field];
-              break;
-            }
-          }
-          
-          setSemesterStartDate(startDateValue);
-          setSelectedWeekRange({
-            startWeek: 1,
-            endWeek: totalWeeksValue
-          });
-        } else {
-          console.warn('未找到周次配置，使用默认值');
-          setTotalWeeks(16);
-          setSelectedWeekRange({
-            startWeek: 1,
-            endWeek: 16
-          });
-        }
+        setSelectedWeekRange({
+          startWeek: 1,
+          endWeek: totalWeeksValue
+        });
       } else {
-        console.warn('未找到学期周次配置数据，使用默认值');
+        console.warn('未找到周次配置，使用默认值');
         setTotalWeeks(16);
+        setSemesterStartDate('');
         setSelectedWeekRange({
           startWeek: 1,
           endWeek: 16
@@ -8760,6 +8629,7 @@ export default function ArrangeClass() {
     } catch (weekError) {
       console.warn('获取周次配置失败，使用默认值:', weekError);
       setTotalWeeks(16);
+      setSemesterStartDate('');
       setSelectedWeekRange({
         startWeek: 1,
         endWeek: 16
@@ -9560,6 +9430,7 @@ export default function ArrangeClass() {
                     const isSelected = selectedCourseName === course.course_name;
                     const actualIndex = startIndex + index;
                     const courseId = (course as any).course_id || course.id || '';
+                    const courseClassId = (course as any).major_class || '';
                     
                     return (
                       <tr 
@@ -9568,6 +9439,7 @@ export default function ArrangeClass() {
                         onClick={() => {
                           setSelectedCourseName(course.course_name || '');
                           setSelectedCourseId(courseId);
+                          setSelectedCourseClassId(courseClassId);
                         }}
                       >
                         <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-center border border-gray-300">
@@ -9615,6 +9487,7 @@ export default function ArrangeClass() {
                               e.stopPropagation();
                               setSelectedCourseName(course.course_name || '');
                               setSelectedCourseId(courseId);
+                              setSelectedCourseClassId(courseClassId);
                             }}
                           >
                             {isSelected ? '已选择' : '选择'}

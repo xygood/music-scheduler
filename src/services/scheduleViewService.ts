@@ -4,9 +4,10 @@
  */
 
 import { supabase } from './supabase';
+import { scheduleService, studentService, courseService, teacherService, roomService, weekConfigService } from './index';
 
-// 判断使用哪种存储模式
-const USE_SUPABASE = false; // 可以根据配置切换
+const USE_DATABASE = import.meta.env.VITE_USE_DATABASE === 'true';
+const USE_SUPABASE = false;
 
 // 排课结果数据类型（来自 ArrangeClass）
 export interface ScheduleResult {
@@ -332,10 +333,28 @@ function buildScheduleResults(
   totalWeeks: number = 17,
   includeMajorClass: boolean = false
 ): ScheduleResult[] {
-  // 构建查找映射
-  const coursesMap = new Map(courses.map(c => [c.id, c]));
-  const studentsMap = new Map(students.map(s => [s.id, s]));
-  const teachersMap = new Map(teachers.map(t => [t.id, t]));
+  // 构建查找映射（同时支持内部ID和课程编号）
+  const coursesMap = new Map();
+  courses.forEach(c => {
+    coursesMap.set(c.id, c);
+    if ((c as any).course_id) {
+      coursesMap.set((c as any).course_id, c);
+    }
+  });
+  const studentsMap = new Map();
+  students.forEach(s => {
+    studentsMap.set(s.id, s);
+    if ((s as any).student_id) {
+      studentsMap.set((s as any).student_id, s);
+    }
+  });
+  const teachersMap = new Map();
+  teachers.forEach(t => {
+    teachersMap.set(t.id, t);
+    if ((t as any).teacher_id) {
+      teachersMap.set((t as any).teacher_id, t);
+    }
+  });
   
   // 按课程+教师+时间分组
   const groups: Record<string, any> = {};
@@ -344,9 +363,9 @@ function buildScheduleResults(
     // 先获取课程信息（用于判断 teaching_type）
     const course = coursesMap.get(schedule.course_id);
     
-    // 获取授课类型和课程类型
-    const teachingType = schedule.teaching_type || course?.teaching_type;
-    const courseType = schedule.course_type || course?.course_type;
+    // 获取授课类型和课程类型（优先从课程数据获取，其次从排课数据获取）
+    const teachingType = (course as any)?.teaching_type || schedule.teaching_type;
+    const courseType = course?.course_type || schedule.course_type;
     const courseName = schedule.course_name || course?.course_name || '';
     
     // 判断是否为专业大课（多种方式）
@@ -555,7 +574,13 @@ export const scheduleViewService = {
       let courses: any[] = [];
       let teachers: any[] = [];
       
-      if (USE_SUPABASE) {
+      if (USE_DATABASE) {
+        // 从 API 获取数据
+        scheduledClasses = await scheduleService.getAll();
+        students = await studentService.getAll();
+        courses = await courseService.getAll();
+        teachers = await teacherService.getAll();
+      } else if (USE_SUPABASE) {
         // 从 Supabase 获取数据
         const { data: classesData } = await supabase
           .from('scheduled_classes')
@@ -694,6 +719,24 @@ export const scheduleViewService = {
    * 订阅排课数据变化（Realtime）
    */
   subscribeToChanges(callback: (payload: any) => void): () => void {
+    if (USE_DATABASE) {
+      // 数据库模式：定时轮询检查变化
+      let lastCount = 0;
+      const checkChanges = async () => {
+        try {
+          const schedules = await scheduleService.getAll();
+          if (schedules.length !== lastCount) {
+            lastCount = schedules.length;
+            callback({ event: 'change', table: 'scheduled_classes' });
+          }
+        } catch (e) {
+          // 忽略错误
+        }
+      };
+      const interval = setInterval(checkChanges, 5000);
+      return () => clearInterval(interval);
+    }
+    
     if (!USE_SUPABASE) {
       // LocalStorage 模式：使用 storage 事件
       const handleStorage = (e: StorageEvent) => {

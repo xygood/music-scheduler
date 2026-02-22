@@ -12,7 +12,7 @@ interface Teacher {
   id: string;
   name: string;
   faculty_id: string;
-  can_teach_courses?: string[];
+  can_teach_instruments?: string[];
 }
 
 interface FacultyFilterProps {
@@ -103,8 +103,8 @@ const FacultyFilter: React.FC<FacultyFilterProps> = ({
     const instrumentsSet = new Set<string>();
     
     instrumentTeachers.forEach(teacher => {
-      if (teacher.can_teach_courses && Array.isArray(teacher.can_teach_courses)) {
-        teacher.can_teach_courses.forEach(course => {
+      if (teacher.can_teach_instruments && Array.isArray(teacher.can_teach_instruments)) {
+        teacher.can_teach_instruments.forEach(course => {
           // 过滤掉非乐器课程（如音乐理论）和属于其他教研室的乐器（如钢琴）
           if (course && !course.includes('理论') && instrumentFacultyInstruments.has(course)) {
             instrumentsSet.add(course);

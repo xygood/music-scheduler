@@ -6,7 +6,9 @@
 import React, { useState, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import localStorageService, { teacherService, studentService, courseService, roomService, scheduleService, STORAGE_KEYS } from '../services/localStorage';
-import { largeClassScheduleService } from '../services';
+import { largeClassScheduleService, syncService, teacherService as apiTeacherService, studentService as apiStudentService } from '../services';
+
+const USE_DATABASE = import.meta.env.VITE_USE_DATABASE === 'true';
 
 import {
   Database,
@@ -272,6 +274,20 @@ const Backup: React.FC = () => {
       // 验证备份格式
       if (!backupData.version || !backupData.data) {
         setRestoreResult({ success: false, message: '无效的备份文件格式' });
+        setRestoreProgress('');
+        return;
+      }
+
+      if (USE_DATABASE) {
+        setRestoreProgress('正在导入数据到数据库...');
+        try {
+          await syncService.import(backupData.data);
+          setRestoreResult({ success: true, message: '数据导入成功！页面将自动刷新。' });
+          setTimeout(() => window.location.reload(), 1500);
+        } catch (error) {
+          console.error('导入失败:', error);
+          setRestoreResult({ success: false, message: `导入失败: ${error}` });
+        }
         setRestoreProgress('');
         return;
       }
@@ -547,13 +563,22 @@ const Backup: React.FC = () => {
   };
 
   // 清空所有数据
-  const handleClearAllData = () => {
+  const handleClearAllData = async () => {
     if (!isAdmin) {
       alert('此功能仅限管理员使用');
       return;
     }
     
     try {
+      if (USE_DATABASE) {
+        setRestoreProgress('正在清空数据库...');
+        await syncService.clear();
+        setRestoreResult({ success: true, message: '数据库已清空！页面将自动刷新。' });
+        setShowClearConfirm(false);
+        setTimeout(() => window.location.reload(), 1000);
+        return;
+      }
+
       // 保存当前用户信息，避免清空后需要重新登录
       const currentUser = sessionStorage.getItem(STORAGE_KEYS.CURRENT_USER);
       

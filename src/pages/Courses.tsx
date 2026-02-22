@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { courseService, studentService, scheduleService, classService, teacherService, STORAGE_KEYS } from '../services/localStorage';
+import { courseService, studentService, scheduleService, classService, teacherService, STORAGE_KEYS } from '../services';
 import * as XLSX from 'xlsx';
 import { Upload, Download, Plus, Trash2, Search, FileSpreadsheet, X, Clock, BookOpen, GraduationCap, Edit2, AlertTriangle } from 'lucide-react';
 import type { Course } from '../types';

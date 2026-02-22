@@ -55,10 +55,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = user?.faculty_id === 'ADMIN' || user?.is_admin === true || user?.role === 'admin' || user?.teacher_id === '110' || user?.email === 'admin@music.edu.cn';
 
   const refreshTeacher = async (userId?: string) => {
-    const id = userId || user?.id;
-    if (id) {
+    const teacherId = userId || user?.teacher_id;
+    if (teacherId) {
       try {
-        const profile = await authService.getTeacherProfile(id);
+        const profile = await authService.getTeacherProfile(teacherId);
         setTeacher(profile);
       } catch (err) {
         console.error('获取教师信息失败:', err);
@@ -84,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const switchedUser = await authService.switchToUser(userId);
       if (switchedUser) {
         setUser(switchedUser);
-        await refreshTeacher(switchedUser.id);
+        await refreshTeacher(switchedUser.teacher_id);
         refreshOnlineTeachers();
       }
     } catch (err) {
@@ -108,8 +108,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (isMounted) {
           setUser(currentUser);
           if (currentUser) {
-            // 直接传递 userId，避免状态更新延迟问题
-            await refreshTeacher(currentUser.id);
+            // 直接传递 teacher_id，避免状态更新延迟问题
+            await refreshTeacher(currentUser.teacher_id);
             // 将当前用户设置为在线状态（解决刷新页面后在线状态丢失的问题）
             authService.setTeacherOnline(currentUser);
             // 直接获取在线教师和已登录用户列表，避免闭包问题
@@ -216,8 +216,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const response = await authService.signIn(email, password);
       setUser(response.user);
-      // 直接传递 userId，避免状态更新延迟问题
-      await refreshTeacher(response.user.id);
+      // 直接传递 teacher_id，避免状态更新延迟问题
+      await refreshTeacher(response.user.teacher_id);
       // 强制结束加载状态
       setLoading(false);
     } catch (err: any) {
@@ -272,8 +272,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // 更新本地状态
       setUser(updatedUser);
-      // 直接传递 userId，避免状态更新延迟问题
-      await refreshTeacher(updatedUser.id);
+      // 直接传递 teacher_id，避免状态更新延迟问题
+      await refreshTeacher(updatedUser.teacher_id);
     } catch (err: any) {
       setError(err.message);
       throw err;

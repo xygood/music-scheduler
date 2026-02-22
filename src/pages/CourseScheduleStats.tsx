@@ -373,10 +373,10 @@ export default function CourseScheduleStats() {
         if (!isTeacherMatch) return false;
 
         // 检查对应的课程是否是小组课
-        const course = courses.find(c => c.id === schedule.course_id);
-        const teachingType = (course as any)?.teaching_type;
-        const courseType = (course as any)?.course_type;
-        const courseName = (course as any)?.course_name || '';
+        const course = courses.find(c => c.id === schedule.course_id || (c as any).course_id === schedule.course_id);
+        const teachingType = (course as any)?.teaching_type || (schedule as any).teaching_type;
+        const courseType = (course as any)?.course_type || (schedule as any).course_type;
+        const courseName = (course as any)?.course_name || (schedule as any).course_name || '';
 
         // 判断是否是小组课：
         // 1. 优先使用 teaching_type
@@ -761,9 +761,9 @@ export default function CourseScheduleStats() {
           
           if (!isStudentMatch) return false;
           
-          const scheduleCourse = courses.find(c => c.id === schedule.course_id);
-          const scheduleCourseType = scheduleCourse?.course_type;
-          const scheduleTeachingType = (scheduleCourse as any)?.teaching_type;
+          const scheduleCourse = courses.find(c => c.id === schedule.course_id || (c as any).course_id === schedule.course_id);
+          const scheduleCourseType = scheduleCourse?.course_type || (schedule as any).course_type;
+          const scheduleTeachingType = (scheduleCourse as any)?.teaching_type || (schedule as any).teaching_type;
           
           const isGroupCourse = scheduleTeachingType === '小组课' || 
                                scheduleTeachingType === '专业小课' ||

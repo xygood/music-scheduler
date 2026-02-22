@@ -1,46 +1,499 @@
-// 服务统一导出 - 使用本地存储模式
-// 切换到 Supabase 模式只需将这里改为导入 ./supabase
+import * as localStorageService from './localStorage';
+import * as apiService from './api';
+import * as apiAuthService from './authService';
+export * from './scheduleViewService';
+export { STORAGE_KEYS } from './localStorage';
 
-import localStorageService from './localStorage';
-import dataManagementService from './dataManagementService';
+const USE_DATABASE = import.meta.env.VITE_USE_DATABASE === 'true';
 
-// 使用本地存储服务
-export const authService = localStorageService.authService;
-export const studentService = localStorageService.studentService;
-export const classService = localStorageService.classService;
-export const courseService = localStorageService.courseService;
-export const roomService = localStorageService.roomService;
-export const scheduleService = localStorageService.scheduleService;
-export const conflictService = localStorageService.conflictService;
-export const teacherService = localStorageService.teacherService;
-export const blockedSlotService = localStorageService.blockedSlotService;
-export const weekConfigService = localStorageService.weekConfigService;
-export const dataConsistencyService = localStorageService.dataConsistencyService;
-export const clearAllData = localStorageService.clearAllData;
-export const importDemoData = localStorageService.importDemoData;
-export const STORAGE_KEYS = localStorageService.STORAGE_KEYS;
+export const teacherService = {
+  async getAll() {
+    if (USE_DATABASE) {
+      return apiService.teachersApi.getAll();
+    }
+    return localStorageService.teacherService.getAll();
+  },
+
+  async getById(id: string) {
+    if (USE_DATABASE) {
+      return apiService.teachersApi.getById(id);
+    }
+    return localStorageService.teacherService.getById(id);
+  },
+
+  async create(data: any) {
+    if (USE_DATABASE) {
+      return apiService.teachersApi.create(data);
+    }
+    return localStorageService.teacherService.create(data);
+  },
+
+  async update(id: string, data: any) {
+    if (USE_DATABASE) {
+      return apiService.teachersApi.update(id, data);
+    }
+    return localStorageService.teacherService.update(id, data);
+  },
+
+  async delete(id: string) {
+    if (USE_DATABASE) {
+      return apiService.teachersApi.delete(id);
+    }
+    return localStorageService.teacherService.delete(id);
+  },
+
+  async getByTeacherId(teacherId: string) {
+    if (USE_DATABASE) {
+      return apiService.teachersApi.getById(teacherId);
+    }
+    return localStorageService.teacherService.getByTeacherId(teacherId);
+  },
+
+  async importManyWithUpsert(teachers: any[]) {
+    if (USE_DATABASE) {
+      return apiService.teachersApi.batchCreate(teachers);
+    }
+    return localStorageService.teacherService.importManyWithUpsert(teachers);
+  },
+
+  async getTeacherRoomMappings() {
+    if (USE_DATABASE) {
+      return apiService.teachersApi.getRoomMappings();
+    }
+    return localStorageService.teacherService.getTeacherRoomMappings?.() || [];
+  },
+
+  async assignRoom(teacherId: string, roomId: string, facultyCode?: string) {
+    if (USE_DATABASE) {
+      return apiService.teachersApi.assignRoom(teacherId, roomId, facultyCode || '');
+    }
+    return localStorageService.teacherService.assignRoom?.(teacherId, roomId);
+  },
+
+  async removeRoomAssignment(teacherId: string, roomId: string) {
+    if (USE_DATABASE) {
+      return apiService.teachersApi.removeRoom(teacherId, roomId);
+    }
+    return localStorageService.teacherService.removeRoomAssignment?.(teacherId, roomId);
+  },
+
+  async getByFaculty(facultyCode: string) {
+    return localStorageService.teacherService.getByFaculty?.(facultyCode) || [];
+  },
+
+  async getAvailableTeachers(instrument?: string) {
+    return localStorageService.teacherService.getAvailableTeachers?.(instrument) || [];
+  },
+
+  async importTeacherRoomsByFaculty(entries: any[]) {
+    return localStorageService.teacherService.importTeacherRoomsByFaculty(entries);
+  }
+};
+
+export const studentService = {
+  async getAll() {
+    if (USE_DATABASE) {
+      return apiService.studentsApi.getAll();
+    }
+    return localStorageService.studentService.getAll();
+  },
+
+  async create(data: any) {
+    if (USE_DATABASE) {
+      return apiService.studentsApi.create(data);
+    }
+    return localStorageService.studentService.create(data);
+  },
+
+  async update(id: string, data: any) {
+    if (USE_DATABASE) {
+      return apiService.studentsApi.update(id, data);
+    }
+    return localStorageService.studentService.update(id, data);
+  },
+
+  async delete(id: string) {
+    if (USE_DATABASE) {
+      return apiService.studentsApi.delete(id);
+    }
+    return localStorageService.studentService.delete(id);
+  },
+
+  async getByTeacher(teacherId: string) {
+    return localStorageService.studentService.getByTeacher(teacherId);
+  },
+
+  async importManyWithUpsert(students: any[]) {
+    if (USE_DATABASE) {
+      return apiService.studentsApi.batchCreate(students);
+    }
+    return localStorageService.studentService.importManyWithUpsert(students);
+  },
+
+  async getByFaculty(facultyCode: string) {
+    return localStorageService.studentService.getByFaculty?.(facultyCode) || [];
+  },
+
+  async getByClass(className: string) {
+    return localStorageService.studentService.getByClass?.(className) || [];
+  },
+
+  async getById(id: string) {
+    return localStorageService.studentService.getById?.(id);
+  }
+};
+
+export const courseService = {
+  async getAll() {
+    if (USE_DATABASE) {
+      return apiService.coursesApi.getAll();
+    }
+    return localStorageService.courseService.getAll();
+  },
+
+  async create(data: any) {
+    if (USE_DATABASE) {
+      return apiService.coursesApi.create(data);
+    }
+    return localStorageService.courseService.create(data);
+  },
+
+  async update(id: string, data: any) {
+    if (USE_DATABASE) {
+      return apiService.coursesApi.update(id, data);
+    }
+    return localStorageService.courseService.update(id, data);
+  },
+
+  async delete(id: string) {
+    if (USE_DATABASE) {
+      return apiService.coursesApi.delete(id);
+    }
+    return localStorageService.courseService.delete(id);
+  },
+
+  async getByTeacher(teacherId: string) {
+    return localStorageService.courseService.getByTeacher(teacherId);
+  },
+
+  async getByStudent(studentId: string) {
+    return localStorageService.courseService.getByStudent?.(studentId) || [];
+  },
+
+  async getByFaculty(facultyCode: string) {
+    return localStorageService.courseService.getByFaculty?.(facultyCode) || [];
+  }
+};
+
+export const roomService = {
+  async getAll() {
+    if (USE_DATABASE) {
+      return apiService.roomsApi.getAll();
+    }
+    return localStorageService.roomService.getAll();
+  },
+
+  async create(data: any) {
+    if (USE_DATABASE) {
+      return apiService.roomsApi.create(data);
+    }
+    return localStorageService.roomService.create(data);
+  },
+
+  async update(id: string, data: any) {
+    if (USE_DATABASE) {
+      return apiService.roomsApi.update(id, data);
+    }
+    return localStorageService.roomService.update(id, data);
+  },
+
+  async delete(id: string) {
+    if (USE_DATABASE) {
+      return apiService.roomsApi.delete(id);
+    }
+    return localStorageService.roomService.delete(id);
+  },
+
+  async getById(id: string) {
+    return localStorageService.roomService.getById?.(id);
+  },
+
+  async getByFaculty(facultyCode: string) {
+    return localStorageService.roomService.getByFaculty?.(facultyCode) || [];
+  },
+
+  async getAvailableRooms() {
+    return localStorageService.roomService.getAvailableRooms?.() || [];
+  }
+};
+
+export const scheduleService = {
+  async getAll() {
+    if (USE_DATABASE) {
+      return apiService.schedulesApi.getAll();
+    }
+    return localStorageService.scheduleService.getAll();
+  },
+
+  async create(data: any) {
+    if (USE_DATABASE) {
+      return apiService.schedulesApi.create(data);
+    }
+    return localStorageService.scheduleService.create(data);
+  },
+
+  async update(id: string, data: any) {
+    if (USE_DATABASE) {
+      return apiService.schedulesApi.update(id, data);
+    }
+    return localStorageService.scheduleService.update(id, data);
+  },
+
+  async delete(id: string) {
+    if (USE_DATABASE) {
+      return apiService.schedulesApi.delete(id);
+    }
+    return localStorageService.scheduleService.delete(id);
+  },
+
+  async getByTeacher(teacherId: string, startDate?: string, endDate?: string) {
+    if (USE_DATABASE) {
+      return apiService.schedulesApi.getAll({ teacher_id: teacherId });
+    }
+    return localStorageService.scheduleService.getByTeacher(teacherId, startDate, endDate);
+  },
+
+  async getByStudent(studentId: string) {
+    if (USE_DATABASE) {
+      const all = await apiService.schedulesApi.getAll();
+      return all.filter((s: any) => s.student_id === studentId);
+    }
+    return localStorageService.scheduleService.getByStudent?.(studentId) || [];
+  },
+
+  async getByRoom(roomId: string) {
+    if (USE_DATABASE) {
+      const all = await apiService.schedulesApi.getAll();
+      return all.filter((s: any) => s.room_id === roomId);
+    }
+    return localStorageService.scheduleService.getByRoom?.(roomId) || [];
+  },
+
+  async getByDateRange(startDate: string, endDate: string) {
+    if (USE_DATABASE) {
+      const all = await apiService.schedulesApi.getAll();
+      return all.filter((s: any) => {
+        if (!s.date) return false;
+        return s.date >= startDate && s.date <= endDate;
+      });
+    }
+    return localStorageService.scheduleService.getByDateRange?.(startDate, endDate) || [];
+  },
+
+  async getByWeek(weekNumber: number) {
+    if (USE_DATABASE) {
+      return apiService.schedulesApi.getAll({ week_number: weekNumber });
+    }
+    return localStorageService.scheduleService.getByWeek?.(weekNumber) || [];
+  },
+
+  async batchCreate(schedules: any[]) {
+    if (USE_DATABASE) {
+      return apiService.schedulesApi.batchCreate(schedules);
+    }
+    return localStorageService.scheduleService.batchCreate?.(schedules);
+  },
+
+  async createMany(schedules: any[]) {
+    if (USE_DATABASE) {
+      return apiService.schedulesApi.batchCreate(schedules);
+    }
+    return localStorageService.scheduleService.batchCreate?.(schedules) || 
+           localStorageService.scheduleService.createMany?.(schedules);
+  }
+};
+
+export const blockedSlotService = {
+  async getAll() {
+    if (USE_DATABASE) {
+      return apiService.blockedSlotsApi.getAll();
+    }
+    return localStorageService.blockedSlotService.getAll();
+  },
+
+  async create(data: any) {
+    if (USE_DATABASE) {
+      return apiService.blockedSlotsApi.create(data);
+    }
+    return localStorageService.blockedSlotService.create(data);
+  },
+
+  async update(id: string, data: any) {
+    if (USE_DATABASE) {
+      return apiService.blockedSlotsApi.update(id, data);
+    }
+    return localStorageService.blockedSlotService.update(id, data);
+  },
+
+  async delete(id: string) {
+    if (USE_DATABASE) {
+      return apiService.blockedSlotsApi.delete(id);
+    }
+    return localStorageService.blockedSlotService.delete(id);
+  },
+
+  async getBySemester(semesterLabel: string) {
+    if (USE_DATABASE) {
+      const allSlots = await apiService.blockedSlotsApi.getAll();
+      return allSlots.filter((s: any) => s.semester_label === semesterLabel);
+    }
+    return localStorageService.blockedSlotService.getBySemester?.(semesterLabel) || [];
+  },
+
+  async getByFaculty(facultyCode: string) {
+    if (USE_DATABASE) {
+      const allSlots = await apiService.blockedSlotsApi.getAll();
+      return allSlots.filter((s: any) => s.faculty_code === facultyCode);
+    }
+    return localStorageService.blockedSlotService.getByFaculty?.(facultyCode) || [];
+  },
+
+  async getByClass(className: string) {
+    if (USE_DATABASE) {
+      const allSlots = await apiService.blockedSlotsApi.getAll();
+      return allSlots.filter((s: any) => 
+        s.class_associations?.some((c: any) => c.name === className || c.id === className)
+      );
+    }
+    return localStorageService.blockedSlotService.getByClass?.(className) || [];
+  },
+
+  async batchCreate(slots: any[]) {
+    if (USE_DATABASE) {
+      return apiService.blockedSlotsApi.batchCreate(slots);
+    }
+    return localStorageService.blockedSlotService.batchCreate?.(slots);
+  }
+};
+
+export const classService = {
+  async getAll() {
+    if (USE_DATABASE) {
+      return apiService.classesApi.getAll();
+    }
+    return localStorageService.classService.getAll();
+  },
+  async getById(id: string) {
+    if (USE_DATABASE) {
+      return apiService.classesApi.getById(id);
+    }
+    return localStorageService.classService.getById(id);
+  },
+  async getByClassName(className: string) {
+    if (USE_DATABASE) {
+      const classes = await apiService.classesApi.getAll();
+      return classes.find((c: any) => c.class_name === className) || null;
+    }
+    return localStorageService.classService.getByClassName(className);
+  },
+  async syncFromStudents(students: any[]) {
+    if (USE_DATABASE) {
+      return;
+    }
+    return localStorageService.classService.syncFromStudents(students);
+  }
+};
+export const authService = USE_DATABASE ? apiAuthService.authService : localStorageService.authService;
+
+export const weekConfigService = {
+  async getAll() {
+    if (USE_DATABASE) {
+      return apiService.semesterConfigsApi.getAll();
+    }
+    return localStorageService.weekConfigService.getAll();
+  },
+
+  async getBySemester(semesterLabel: string) {
+    if (USE_DATABASE) {
+      return apiService.semesterConfigsApi.getBySemester(semesterLabel);
+    }
+    return localStorageService.weekConfigService.getBySemester(semesterLabel);
+  },
+
+  async upsert(data: any) {
+    if (USE_DATABASE) {
+      return apiService.semesterConfigsApi.upsert(data);
+    }
+    return localStorageService.weekConfigService.upsert(data);
+  },
+
+  async create(data: any) {
+    if (USE_DATABASE) {
+      return apiService.semesterConfigsApi.create(data);
+    }
+    return localStorageService.weekConfigService.create(data);
+  },
+
+  async update(id: string, data: any) {
+    if (USE_DATABASE) {
+      return apiService.semesterConfigsApi.update(id, data);
+    }
+    return localStorageService.weekConfigService.update(id, data);
+  }
+};
+
 export const largeClassScheduleService = localStorageService.largeClassScheduleService;
-
-// 新增：学生-教师分配相关服务
 export const studentTeacherAssignmentService = localStorageService.studentTeacherAssignmentService;
-export const studentMajorAssignmentService = localStorageService.studentMajorAssignmentService;
 
-// 新增：高级排课服务
-export { generalCourseService } from './generalCourseService';
-export { majorCourseService } from './majorCourseService';
-export { timeBlockerService } from './timeBlockerService';
-export { largeClassBlockerService } from './largeClassBlockerService';
+export const syncService = {
+  async getAll() {
+    if (USE_DATABASE) {
+      return apiService.syncApi.getAll();
+    }
+    return {
+      teachers: await localStorageService.teacherService.getAll(),
+      students: await localStorageService.studentService.getAll(),
+      courses: await localStorageService.courseService.getAll(),
+      rooms: await localStorageService.roomService.getAll(),
+      schedules: await localStorageService.scheduleService.getAll(),
+      blocked_slots: await localStorageService.blockedSlotService.getAll(),
+      classes: await localStorageService.classService.getAll(),
+    };
+  },
 
-// 数据管理服务
-export { dataManagementService };
+  async import(data: any) {
+    if (USE_DATABASE) {
+      return apiService.syncApi.import(data);
+    }
+    if (data.teachers) {
+      await localStorageService.teacherService.importManyWithUpsert(data.teachers);
+    }
+    if (data.students) {
+      await localStorageService.studentService.importManyWithUpsert(data.students);
+    }
+    return { message: 'Data imported successfully' };
+  },
 
-// 排课视图服务 - 统一数据获取和转换
-export { scheduleViewService } from './scheduleViewService';
-export type {
-  ScheduleResult,
-  ScheduleClassView,
-  ViewFilters,
-  StudentInfo,
-  OriginalSchedule,
-  TimeSlot
-} from './scheduleViewService';
+  async clear() {
+    if (USE_DATABASE) {
+      return apiService.syncApi.clear();
+    }
+    localStorageService.clearAllData();
+    return { message: 'All data cleared' };
+  },
+};
+
+export default {
+  teacherService,
+  studentService,
+  courseService,
+  roomService,
+  scheduleService,
+  blockedSlotService,
+  classService,
+  authService,
+  weekConfigService,
+  largeClassScheduleService,
+  studentTeacherAssignmentService,
+  syncService,
+};

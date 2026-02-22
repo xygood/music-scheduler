@@ -33,13 +33,28 @@ const WeekSelector: React.FC<WeekSelectorProps> = ({
     
     try {
       const startDate = new Date(semesterStartDate);
-      // 计算该周的起始日期（周一）
-      const weekStart = new Date(startDate);
-      weekStart.setDate(startDate.getDate() + (week - 1) * 7);
       
-      // 计算该周的结束日期（周日）
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
+      // 获取某日期所在周的周一
+      const getMonday = (date: Date): Date => {
+        const d = new Date(date);
+        const day = d.getDay();
+        // getDay() 返回 0-6，其中 0 是星期日
+        // 周一为一周的第一天：周日(0)属于上一周
+        const diff = day === 0 ? -6 : 1 - day;
+        d.setDate(d.getDate() + diff);
+        return d;
+      };
+      
+      // 学期开始的周一
+      const startMonday = getMonday(startDate);
+      
+      // 计算目标周的周一
+      const targetMonday = new Date(startMonday);
+      targetMonday.setDate(startMonday.getDate() + (week - 1) * 7);
+      
+      // 计算目标周的周日
+      const targetSunday = new Date(targetMonday);
+      targetSunday.setDate(targetMonday.getDate() + 6);
       
       // 格式化日期（MM-DD）
       const formatDate = (date: Date) => {
@@ -48,7 +63,7 @@ const WeekSelector: React.FC<WeekSelectorProps> = ({
         return `${month}-${day}`;
       };
       
-      return `${formatDate(weekStart)}~${formatDate(weekEnd)}`;
+      return `${formatDate(targetMonday)}~${formatDate(targetSunday)}`;
     } catch (error) {
       return '';
     }

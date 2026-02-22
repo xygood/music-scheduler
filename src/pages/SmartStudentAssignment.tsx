@@ -131,22 +131,22 @@ const SmartStudentAssignment: React.FC = () => {
           
           // 构建分配教师映射
           const assignedTeachers = {
-            primary_teacher_id: s.assigned_teachers?.primary_teacher_id || s.teacher_id, // 优先使用assigned_teachers中的数据，兼容旧字段
+            primary_teacher_id: s.assigned_teachers?.primary_teacher_id || s.teacher_id,
             primary_teacher_name: s.assigned_teachers?.primary_teacher_name || 
-                                 teachersData.find(t => t.id === (s.assigned_teachers?.primary_teacher_id || s.teacher_id))?.full_name || 
-                                 teachersData.find(t => t.id === (s.assigned_teachers?.primary_teacher_id || s.teacher_id))?.name,
+                                 teachersData.find(t => t.id === (s.assigned_teachers?.primary_teacher_id || s.teacher_id) || t.teacher_id === (s.assigned_teachers?.primary_teacher_id || s.teacher_id))?.full_name || 
+                                 teachersData.find(t => t.id === (s.assigned_teachers?.primary_teacher_id || s.teacher_id) || t.teacher_id === (s.assigned_teachers?.primary_teacher_id || s.teacher_id))?.name,
             secondary1_teacher_id: s.assigned_teachers?.secondary1_teacher_id || s.secondary1_teacher_id || undefined,
             secondary1_teacher_name: s.assigned_teachers?.secondary1_teacher_name || 
-                                    teachersData.find(t => t.id === (s.assigned_teachers?.secondary1_teacher_id || s.secondary1_teacher_id))?.full_name || 
-                                    teachersData.find(t => t.id === (s.assigned_teachers?.secondary1_teacher_id || s.secondary1_teacher_id))?.name,
+                                    teachersData.find(t => t.id === (s.assigned_teachers?.secondary1_teacher_id || s.secondary1_teacher_id) || t.teacher_id === (s.assigned_teachers?.secondary1_teacher_id || s.secondary1_teacher_id))?.full_name || 
+                                    teachersData.find(t => t.id === (s.assigned_teachers?.secondary1_teacher_id || s.secondary1_teacher_id) || t.teacher_id === (s.assigned_teachers?.secondary1_teacher_id || s.secondary1_teacher_id))?.name,
             secondary2_teacher_id: s.assigned_teachers?.secondary2_teacher_id || s.secondary2_teacher_id || undefined,
             secondary2_teacher_name: s.assigned_teachers?.secondary2_teacher_name || 
-                                    teachersData.find(t => t.id === (s.assigned_teachers?.secondary2_teacher_id || s.secondary2_teacher_id))?.full_name || 
-                                    teachersData.find(t => t.id === (s.assigned_teachers?.secondary2_teacher_id || s.secondary2_teacher_id))?.name,
+                                    teachersData.find(t => t.id === (s.assigned_teachers?.secondary2_teacher_id || s.secondary2_teacher_id) || t.teacher_id === (s.assigned_teachers?.secondary2_teacher_id || s.secondary2_teacher_id))?.full_name || 
+                                    teachersData.find(t => t.id === (s.assigned_teachers?.secondary2_teacher_id || s.secondary2_teacher_id) || t.teacher_id === (s.assigned_teachers?.secondary2_teacher_id || s.secondary2_teacher_id))?.name,
             secondary3_teacher_id: s.assigned_teachers?.secondary3_teacher_id || s.secondary3_teacher_id || undefined,
             secondary3_teacher_name: s.assigned_teachers?.secondary3_teacher_name || 
-                                    teachersData.find(t => t.id === (s.assigned_teachers?.secondary3_teacher_id || s.secondary3_teacher_id))?.full_name || 
-                                    teachersData.find(t => t.id === (s.assigned_teachers?.secondary3_teacher_id || s.secondary3_teacher_id))?.name,
+                                    teachersData.find(t => t.id === (s.assigned_teachers?.secondary3_teacher_id || s.secondary3_teacher_id) || t.teacher_id === (s.assigned_teachers?.secondary3_teacher_id || s.secondary3_teacher_id))?.full_name || 
+                                    teachersData.find(t => t.id === (s.assigned_teachers?.secondary3_teacher_id || s.secondary3_teacher_id) || t.teacher_id === (s.assigned_teachers?.secondary3_teacher_id || s.secondary3_teacher_id))?.name,
           };
 
           return {
@@ -501,7 +501,7 @@ const SmartStudentAssignment: React.FC = () => {
         };
 
         // 检查2304班级的分配
-        if (student.class_name?.includes('2304')) {
+        if ((student.major_class || student.class_name)?.includes('2304')) {
           // 2304班级（专升本）：确保主项为空，只使用副项1-3
           result.primaryTeacher = undefined;
         }
@@ -660,7 +660,7 @@ const SmartStudentAssignment: React.FC = () => {
   const filteredStudents = students.filter(student => {
     const matchesSearch = student.name.includes(searchTerm) ||
                          String(student.student_id).includes(searchTerm);
-    const matchesClass = filterClass === 'all' || student.class_name === filterClass;
+    const matchesClass = filterClass === 'all' || student.major_class === filterClass || student.class_name === filterClass;
     const matchesMajor = filterMajor === 'all' || 
                         student.instrument === filterMajor ||
                         student.primary_instrument === filterMajor;
@@ -681,7 +681,7 @@ const SmartStudentAssignment: React.FC = () => {
   });
 
   // 获取唯一班级列表
-  const uniqueClasses = [...new Set(students.map(s => s.class_name).filter(Boolean))].sort();
+  const uniqueClasses = [...new Set(students.map(s => s.major_class || s.class_name).filter(Boolean))].sort();
   
   // 获取唯一专业列表
   const uniqueMajors = [...new Set(students.map(s => s.instrument).filter(Boolean))].sort();
@@ -695,7 +695,7 @@ const SmartStudentAssignment: React.FC = () => {
   // 学生数据映射逻辑 - 统一处理所有班级
   const getStudentDataForDisplay = (student: Student) => {
     // 检查是否为2304班级
-    const isClass2304 = student.class_name?.includes('2304');
+    const isClass2304 = (student.major_class || student.class_name)?.includes('2304');
     
     // 2304班级：主项为空，副项1-3显示导入数据
     if (isClass2304) {
@@ -1079,7 +1079,7 @@ const SmartStudentAssignment: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-3 sm:px-4 py-4 text-sm text-gray-600">
-                        {student.class_name?.replace('音乐学', '') || student.class_name}
+                        {(student.major_class || student.class_name)?.replace('音乐学', '') || student.major_class || student.class_name}
                       </td>
                        
                       {/* 多专业分配显示 */}
@@ -1092,7 +1092,7 @@ const SmartStudentAssignment: React.FC = () => {
                         </td>
                         <td className="px-3 sm:px-4 py-4 text-sm text-gray-900">
                           {/* 检查是否为2304班级（专升本） */}
-                          {student.class_name?.includes('2304') ? (
+                          {(student.major_class || student.class_name)?.includes('2304') ? (
                             <span className="text-sm text-gray-400">-</span>
                           ) : editingStudentId === student.id ? (
                             <select
@@ -1182,7 +1182,7 @@ const SmartStudentAssignment: React.FC = () => {
                         
                         {/* 副项3专业和教师 */}
                         <td className="px-3 sm:px-4 py-4 text-sm text-gray-900">
-                          {student.class_name?.includes('2304') ? (
+                          {(student.major_class || student.class_name)?.includes('2304') ? (
                             studentData.secondary3Major ? (
                               <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                                 {extractInstrumentFromNotes(student.notes || '', studentData.secondary3Major)}
@@ -1197,7 +1197,7 @@ const SmartStudentAssignment: React.FC = () => {
                           )}
                         </td>
                         <td className="px-3 sm:px-4 py-4 text-sm text-gray-900">
-                          {student.class_name?.includes('2304') ? (
+                          {(student.major_class || student.class_name)?.includes('2304') ? (
                             editingStudentId === student.id ? (
                               <select
                                 value={student.assigned_teachers?.secondary3_teacher_id || ''}

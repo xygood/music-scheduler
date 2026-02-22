@@ -1,13 +1,15 @@
 import { io, Socket } from 'socket.io-client';
 import { STORAGE_KEYS } from './localStorage';
 
+const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:5000';
+const USE_DATABASE = import.meta.env.VITE_USE_DATABASE === 'true';
+
 class WebSocketService {
   private socket: Socket | null = null;
   private listeners: Map<string, ((data: any) => void)[]> = new Map();
   private isConnected = false;
 
-  // 初始化WebSocket连接
-  connect(url: string = 'http://47.122.118.106:3001'): Promise<boolean> {
+  connect(url: string = WS_URL): Promise<boolean> {
     return new Promise((resolve) => {
       try {
         this.socket = io(url, {

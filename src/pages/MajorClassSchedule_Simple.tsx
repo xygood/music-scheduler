@@ -2884,10 +2884,10 @@ export default function MajorClassSchedule() {
         
         // 设置目标教师
         if (isAdmin) {
-          if (!targetTeacher && teacher) {
-            setTargetTeacher(teacher);
-          }
+          // 管理员默认显示所有教师的课程，不设置 targetTeacher
+          // 用户可以通过下拉框选择特定教师或"所有教师"
         } else {
+          // 非管理员只能查看自己的课程
           setTargetTeacher(teacher);
         }
       } catch (error) {

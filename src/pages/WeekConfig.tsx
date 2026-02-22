@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { weekConfigService, blockedSlotService, classService } from '../services/localStorage';
+import { weekConfigService, blockedSlotService, classService } from '../services';
 import { useAuth } from '../hooks/useAuth';
 import { Calendar, Plus, Trash2, Clock, AlertCircle, Check, X, Lock, Users, Edit } from 'lucide-react';
 import { SemesterWeekConfig, BlockedSlot, BlockedSlotType, PERIOD_CONFIG } from '../types';
@@ -955,38 +955,29 @@ export default function WeekConfig() {
                   
                   // 计算日期对应的周次（以周一为一周的第一天）
                   const calculateWeekNumber = (dateString: string): number => {
-                    // 使用默认的学期开始日期，如果没有设置的话
-                    const defaultStartDate = '2026-02-23';
-                    const startDateStr = semesterConfig.start_date || defaultStartDate;
+                    const startDateStr = semesterConfig.start_date || '2026-02-23';
                     const startDate = new Date(startDateStr);
                     const targetDate = new Date(dateString);
                     
-                    // 检查日期是否有效
                     if (isNaN(startDate.getTime()) || isNaN(targetDate.getTime())) {
                       return 1;
                     }
                     
-                    // 调整开始日期到周一
-                    const startDay = startDate.getDay();
-                    // getDay() 返回 0-6，其中 0 是星期日，1-6 是周一到周六
-                    // 我们需要将其调整为以周一为一周的第一天
-                    const adjustedStartDate = new Date(startDate);
-                    if (startDay === 0) { // 如果开始日期是星期日，调整到前一天（周六）
-                      adjustedStartDate.setDate(adjustedStartDate.getDate() - 1);
-                    } else { // 否则调整到本周一
-                      adjustedStartDate.setDate(adjustedStartDate.getDate() - (startDay - 1));
-                    }
+                    // 获取某日期所在周的周一
+                    const getMonday = (date: Date): Date => {
+                      const d = new Date(date);
+                      const day = d.getDay();
+                      // getDay() 返回 0-6，其中 0 是星期日
+                      // 周一为一周的第一天：周日(0)属于上一周，周一(1)到周日(0)为一周
+                      const diff = day === 0 ? -6 : 1 - day;
+                      d.setDate(d.getDate() + diff);
+                      return d;
+                    };
                     
-                    // 调整目标日期到周一
-                    const targetDay = targetDate.getDay();
-                    const adjustedTargetDate = new Date(targetDate);
-                    if (targetDay === 0) { // 如果目标日期是星期日，调整到前一天（周六）
-                      adjustedTargetDate.setDate(adjustedTargetDate.getDate() - 1);
-                    } else { // 否则调整到本周一
-                      adjustedTargetDate.setDate(adjustedTargetDate.getDate() - (targetDay - 1));
-                    }
+                    const startMonday = getMonday(startDate);
+                    const targetMonday = getMonday(targetDate);
                     
-                    const timeDiff = adjustedTargetDate.getTime() - adjustedStartDate.getTime();
+                    const timeDiff = targetMonday.getTime() - startMonday.getTime();
                     const weekDiff = Math.floor(timeDiff / (1000 * 3600 * 24 * 7)) + 1;
                     
                     return Math.max(1, weekDiff);
@@ -996,32 +987,29 @@ export default function WeekConfig() {
                   let day = '未知';
                   if (slot.type === 'recurring') {
                     day = WEEK_DAYS.find(d => d.value === slot.day_of_week)?.label || '未知';
-                  } else if (slot.specific_week_days) {
+                  } else if (slot.specific_week_days && slot.specific_week_days.length > 0) {
                     const days = slot.specific_week_days.map((wd: any) => {
                       return WEEK_DAYS.find(d => d.value === wd.day)?.label || '未知';
                     });
                     day = [...new Set(days)].join('、');
                   } else if (slot.type === 'specific' && slot.start_date && slot.end_date) {
-                    // 为日期范围类型计算星期几
                     const startDate = new Date(slot.start_date);
                     const endDate = new Date(slot.end_date);
                     const daySet = new Set<string>();
                     
-                    // 遍历日期范围内的所有日期，计算星期几
                     const currentDate = new Date(startDate);
                     while (currentDate <= endDate) {
                       const dayIndex = currentDate.getDay();
-                      // getDay() 返回 0-6，其中 0 是星期日，1-6 是周一到周六
-                      // 而 WEEK_DAYS 是 1-7，其中 1 是周一，7 是周日
                       const adjustedDayIndex = dayIndex === 0 ? 7 : dayIndex;
                       const dayLabel = WEEK_DAYS.find(d => d.value === adjustedDayIndex)?.label || '未知';
                       daySet.add(dayLabel);
                       
-                      // 移动到下一天
                       currentDate.setDate(currentDate.getDate() + 1);
                     }
                     
                     day = Array.from(daySet).join('、');
+                  } else if (slot.type === 'specific') {
+                    day = '全周';
                   }
                   
                   // 生成节次
@@ -1117,12 +1105,13 @@ export default function WeekConfig() {
                     
                     return rows;
                   } else {
-                    // 生成周次范围
-                    let weekRange = '1-17周'; // 默认全学期
+                    let weekRange = '1-17周';
                     if (slot.type === 'specific') {
-                      if (slot.week_number) {
+                      if (slot.weeks) {
+                        weekRange = slot.weeks;
+                      } else if (slot.week_number) {
                         weekRange = `${slot.week_number}周`;
-                      } else if (slot.specific_week_days) {
+                      } else if (slot.specific_week_days && slot.specific_week_days.length > 0) {
                         const weeks = [...new Set(slot.specific_week_days.map((wd: any) => wd.week))];
                         if (weeks.length === 1) {
                           weekRange = `${weeks[0]}周`;

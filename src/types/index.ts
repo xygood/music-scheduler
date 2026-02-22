@@ -291,7 +291,7 @@ export interface Teacher {
   status?: 'active' | 'inactive' | 'on_leave';  // 状态
   primary_instrument?: string;      // 主要教学乐器
   qualifications?: TeacherQualificationData[];  // 教学资质
-  can_teach_courses: string[];  // 可教授的课程列表
+  can_teach_instruments: string[];  // 可教授的乐器列表
   max_students_per_class?: number;  // 每班最大学生数
   fixed_room_id?: string;           // 固定琴房ID（兼容旧版本，单一琴房）
   fixed_rooms?: {                   // 多琴房配置（一位教师多个琴房）
@@ -347,25 +347,38 @@ export const COURSE_TYPES = ['钢琴', '声乐', '器乐'] as const;
 // 学生类型
 export interface Student {
   id: string;
-  teacher_id?: string;          // 保留以兼容旧版本，已标记为废弃
+  teacher_id?: string;
   student_id: string;
   name: string;
-  major_class: string;           // 专业班级，如"音乐学2401"
-  grade: number;                 // 年级（从班级号提取，如24表示24级）
-  student_type: 'general' | 'upgrade'; // 学生类型：普通班/专升本
-  primary_instrument?: string;   // 主项（如钢琴）
-  secondary_instruments: string[]; // 副项列表（2-3个）
-  remarks?: string;              // 备注：器乐详细专业
-  faculty_code: string;          // 教研室代码（PIANO, VOCAL, INSTRUMENT）
+  major_class: string;
+  grade: number;
+  student_type: 'general' | 'upgrade';
+  primary_instrument?: string;
+  secondary_instruments: string[];
+  remarks?: string;
+  faculty_code: string;
   status: 'active' | 'inactive';
-  enrollment_year?: number;       // 入学年份
-  current_grade?: number;        // 当前年级
-  student_status?: 'active' | 'inactive' | 'suspended' | 'graduated'; // 学生状态
+  enrollment_year?: number;
+  current_grade?: number;
+  student_status?: 'active' | 'inactive' | 'suspended' | 'graduated';
   created_at: string;
-  updated_at?: string;           // 更新时间戳
-  // 兼容旧版本的虚拟字段
-  instrument?: string;           // 虚拟字段：根据主项/副项计算
-  grade_text?: string;           // 虚拟字段：年级文字
+  updated_at?: string;
+  assigned_teachers?: {
+    primary_teacher_id?: string;
+    primary_teacher_name?: string;
+  };
+  secondary1_teacher_id?: string;
+  secondary1_teacher_name?: string;
+  secondary2_teacher_id?: string;
+  secondary2_teacher_name?: string;
+  secondary3_teacher_id?: string;
+  secondary3_teacher_name?: string;
+  secondary_instrument1?: string;
+  secondary_instrument2?: string;
+  secondary_instrument3?: string;
+  notes?: string;
+  instrument?: string;
+  grade_text?: string;
 }
 
 // 新增：学生-教师分配关联表接口
@@ -544,28 +557,30 @@ export function getStudentGradeText(grade: number): string {
 // 课程类型
 export interface Course {
   id: string;
+  course_id?: string;
   teacher_id: string;
+  teacher_name?: string;
   course_name: string;
   course_type: '钢琴' | '声乐' | '器乐';
-  faculty_id?: string;           // 教研室ID
+  faculty_id?: string;
   student_id?: string;
   student_name?: string;
-  major_class?: string;          // 专业班级
-  academic_year?: string;        // 学年，如 "2025-2026"
-  semester?: number;             // 学期序号（1-8）
-  semester_label?: string;       // 学期标签，如 "2025-2026-1"
-  // 课程与主副项的关系
-  course_category: 'primary' | 'secondary' | 'general'; // 主项课程/副项课程/通用课程
-  primary_instrument?: string;   // 主项（如钢琴）
-  secondary_instrument?: string; // 副项（如古筝）
+  major_class?: string;
+  academic_year?: string;
+  semester?: number;
+  semester_label?: string;
+  course_category: 'primary' | 'secondary' | 'general';
+  primary_instrument?: string;
+  secondary_instrument?: string;
   duration: number;
   week_frequency: number;
-  // 学分与课时相关字段
-  credit?: number;               // 学分（1或2）
-  required_hours?: number;       // 所需课时（16或32）
-  // 小组课配置
-  group_size?: number;           // 小组人数（1-8）
+  credit?: number;
+  required_hours?: number;
+  group_size?: number;
+  student_count?: number;
+  teaching_type?: '专业大课' | '小组课' | '一对一';
   created_at: string;
+  updated_at?: string;
 }
 
 // 小组类型
@@ -854,72 +869,95 @@ export function getCourseTypesByInstruments(instruments: string[]): ('钢琴' | 
 // 学期周次配置
 export interface SemesterWeekConfig {
   id: string;
-  academic_year: string;     // 学年，如 "2025"
-  semester_label: string;    // 学期标签，如 "2025-1" 或 "2025-2"
-  start_date: string;        // 学期开始日期（YYYY-MM-DD），也是第1周开始日期
-  total_weeks: number;       // 总周数（如 16）
+  academic_year: string;
+  semester_label: string;
+  start_date: string;
+  total_weeks: number;
   created_at: string;
   updated_at?: string;
 }
 
-// 禁排时段类型
+export interface Class {
+  id: string;
+  class_id?: string;
+  class_name: string;
+  enrollment_year?: number;
+  class_number?: number;
+  student_count?: number;
+  student_type?: 'general' | 'upgrade';
+  status?: 'active' | 'inactive';
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface User {
+  id: string;
+  teacher_id?: string;
+  email?: string;
+  full_name?: string;
+  department?: string;
+  faculty_id?: string;
+  faculty_code?: string;
+  specialty?: string[];
+  is_admin?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export type BlockedSlotType = 'specific' | 'recurring';
 
 // 禁排时段
 export interface BlockedSlot {
   id: string;
-  academic_year: string;     // 学年
-  semester_label: string;    // 学期标签
-  type: BlockedSlotType;     // 类型：specific（特定周）/recurring（每周循环）
-  class_associations?: { id: string; name: string }[]; // 关联的班级列表（可选，为空表示全局）
-  // specific 类型使用
-  week_number?: number;      // 特定周次（如第7周）
-  specific_week_days?: { week: number; day: number }[]; // 特定周次的星期几多选（用于特定周内特定日子禁排）
-  // recurring 类型使用
-  day_of_week?: number;      // 星期几 (1-7)，用于每周循环禁排
-  start_period?: number;     // 开始节次
-  end_period?: number;       // 结束节次
-  // 两种类型都使用
-  start_date?: string;       // 开始日期（specific类型，用于考试周等）
-  end_date?: string;         // 结束日期（specific类型）
-  reason?: string;           // 禁排原因（如"期末考试"、"国庆放假"）
-  weeks?: string;            // 周次范围字符串（如"13-14周"），用于快速显示和同步
+  academic_year: string;
+  semester_label: string;
+  type: BlockedSlotType;
+  class_associations?: { id: string; name: string }[];
+  week_number?: number;
+  specific_week_days?: { week: number; day: number }[];
+  day_of_week?: number;
+  start_period?: number;
+  end_period?: number;
+  start_date?: string;
+  end_date?: string;
+  reason?: string;
+  weeks?: string;
   created_at: string;
+  updated_at?: string;
 }
 
-// 课表时间槽（支持多课时模式）
 export interface TimeSlot {
   id: string;
-  day_of_week: number;       // 星期几 (1-7)
-  period: number;            // 节次 (1-10)
-  duration: number;          // 持续节数（1-4节）
+  day_of_week: number;
+  period: number;
+  duration: number;
 }
 
-// 排课结果类型（增强版，支持周次范围）
 export interface ScheduledClass {
   id: string;
   teacher_id: string;
+  teacher_name?: string;
   course_id: string;
+  course_code?: string;
+  class_id?: string;
   room_id: string;
   student_id: string;
-  day_of_week: number;       // 星期几 (1-7)
-  date?: string;             // 具体日期 (YYYY-MM-DD格式，支持按日期排课)
-  period: number;            // 节次：1-10
-  duration?: number;         // 持续节数（1-4节）
-  // 周次范围
-  start_week: number;        // 开始周次
-  end_week: number;          // 结束周次
-  specific_dates?: string[]; // 特定日期列表（用于节假日调课等）
-  // 兼容旧版本
+  day_of_week: number;
+  date?: string;
+  period: number;
+  duration?: number;
+  start_week: number;
+  end_week: number;
+  specific_dates?: string[];
   week_number?: number;
-  faculty_id?: string;       // 教研室ID
-  semester_label?: string;   // 学期标签，如 "2024-1" 或 "2024-2"
-  academic_year?: string;    // 学年，如 "2024"
-  semester?: number;         // 学期序号：1-8（对应1-8学期）
+  faculty_id?: string;
+  semester_label?: string;
+  academic_year?: string;
+  semester?: number;
   status: 'scheduled' | 'completed' | 'cancelled';
-  group_id?: string;         // 小组ID，用于关联同组学生的排课记录
+  group_id?: string;
   created_at: string;
-  updated_at?: string;       // 更新时间
+  updated_at?: string;
 }
 
 // 获取周次列表（1-N周）

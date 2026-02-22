@@ -58,7 +58,7 @@ export const STORAGE_KEYS = {
 };
 
 // 初始化示例数据
-const initializeDemoData = async () => {
+const _initializeDemoData = async () => {
   // 确保用户数据存储存在
   if (!localStorage.getItem(STORAGE_KEYS.USERS)) {
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify([]));
@@ -2228,8 +2228,10 @@ export const clearAllData = () => {
   Object.values(STORAGE_KEYS).forEach(key => {
     localStorage.removeItem(key);
   });
-  initializeDemoData();
+  _initializeDemoData();
 };
+
+export const initializeDemoData = _initializeDemoData;
 
 // 工具函数：导入示例数据
 export const importDemoData = (userId: string) => {
@@ -2338,11 +2340,11 @@ export default {
   get weekConfigService() { return weekConfigService; },
   get blockedSlotService() { return blockedSlotService; },
   get largeClassScheduleService() { return largeClassScheduleService; },
-  // 新增：学生-教师分配相关服务
   get studentTeacherAssignmentService() { return studentTeacherAssignmentService; },
   get studentMajorAssignmentService() { return studentMajorAssignmentService; },
   clearAllData,
   importDemoData,
+  initializeDemoData,
   STORAGE_KEYS,
 };
 

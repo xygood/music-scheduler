@@ -1069,7 +1069,7 @@ export const importBackupData = async () => {
     const teacherImportResult = await teacherService.importManyWithUpsert(
       data.teachers.map(teacher => {
         // 智能识别理论教师：如果可教课程中包含音乐理论，归属到理论教研室
-        const isTheoryTeacher = teacher.can_teach_courses?.includes('音乐理论');
+        const isTheoryTeacher = (teacher.can_teach_instruments || teacher.can_teach_courses)?.includes('音乐理论');
         const correctedFacultyId = isTheoryTeacher ? 'THEORY' : teacher.faculty_id;
         const correctedFacultyName = isTheoryTeacher ? '理论教研室' : teacher.faculty_name;
         
@@ -1087,7 +1087,7 @@ export const importBackupData = async () => {
           hire_date: teacher.hire_date,
           status: teacher.status,
           qualifications: teacher.qualifications || [],
-          can_teach_courses: teacher.can_teach_courses,
+          can_teach_instruments: teacher.can_teach_instruments || teacher.can_teach_courses,
           max_students_per_class: teacher.max_students_per_class,
           fixed_rooms: teacher.fixed_rooms || [],
           updated_at: teacher.updated_at

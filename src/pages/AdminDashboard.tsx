@@ -1737,7 +1737,7 @@ export default function AdminDashboard() {
                         <div className="flex flex-col items-end">
                           <div className="text-xs text-gray-500">可教课程</div>
                           <div className="flex flex-wrap gap-1 mt-1">
-                            {(teacher.can_teach_courses || []).map((course, idx) => (
+                            {(teacher.can_teach_instruments || []).map((course, idx) => (
                               <span key={idx} className="px-2 py-0.5 text-xs rounded-full bg-white border border-gray-200 text-gray-600">
                                 {course}
                               </span>
@@ -2026,7 +2026,7 @@ export default function AdminDashboard() {
                         <div className="flex flex-col items-end">
                           <div className="text-xs text-gray-500">可教课程</div>
                           <div className="flex flex-wrap gap-1 mt-1">
-                            {(teacher.can_teach_courses || []).map((course, idx) => (
+                            {(teacher.can_teach_instruments || []).map((course, idx) => (
                               <span key={idx} className="px-2 py-0.5 text-xs rounded-full bg-white border border-gray-200 text-gray-600">
                                 {course}
                               </span>

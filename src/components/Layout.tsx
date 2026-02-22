@@ -1,9 +1,9 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { NotificationContainer } from './NotificationComponents';
-import { Home, Users, BookOpen, MapPin, Calendar, Settings, LogOut, Music, ChevronDown, User, BarChart3, ClipboardList, Award, FlaskConical, Upload, UserPlus, CalendarPlus, Download, GraduationCap, Database, FolderOpen, ChevronRight, DatabaseBackup, Zap } from 'lucide-react';
+import { Home, Users, BookOpen, MapPin, Calendar, Settings, LogOut, Music, ChevronDown, User, BarChart3, ClipboardList, Award, FlaskConical, Upload, UserPlus, CalendarPlus, Download, GraduationCap, Database, FolderOpen, ChevronRight, DatabaseBackup, Zap, Lightbulb } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { STORAGE_KEYS } from '../services/localStorage';
+import { STORAGE_KEYS } from '../services';
 import websocketService from '../services/websocketService';
 
 export default function Layout() {
@@ -110,6 +110,8 @@ export default function Layout() {
   // 教师可见的核心功能菜单
   const teacherMenuItems = [
     { path: '/', icon: Home, label: '数据统计' },
+    // 排课建议：教师有专业小课或者是管理员才显示
+    ...(hasIndividualCourses || isAdmin ? [{ path: '/priority-suggestion', icon: Lightbulb, label: '排课建议' }] : []),
     // 专业小课：教师有专业小课或者是管理员才显示
     ...(hasIndividualCourses || isAdmin ? [{ path: '/arrange-class', icon: CalendarPlus, label: '专业小课' }] : []),
     // 专业大课：教师有专业大课或者是管理员才显示

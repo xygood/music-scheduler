@@ -17,7 +17,7 @@ export const quickFixTheoryTeachers = async () => {
     
     // 查找需要修正的理论教师
     const theoryTeachers = allTeachers.filter(teacher => 
-      teacher.can_teach_courses?.includes('音乐理论')
+      teacher.can_teach_instruments?.includes('音乐理论')
     );
     
     console.log(`🎯 找到 ${theoryTeachers.length} 位理论教师需要修正:`);

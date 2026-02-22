@@ -8,7 +8,7 @@ import { FACULTIES, PERIOD_CONFIG, getFacultyCodeForInstrument } from '../types'
 import FacultyFilter from '../components/FacultyFilter';
 import { Calendar, Clock, MapPin, Users, ChevronLeft, ChevronRight, Filter, X, Loader2 } from 'lucide-react';
 import { supabase } from '../services/supabase';
-import { scheduleViewService, ScheduleClassView, ViewFilters } from '../services';
+import { scheduleViewService, ScheduleClassView, ViewFilters, weekConfigService, teacherService, roomService } from '../services';
 
 interface Room {
   id: string;
@@ -63,10 +63,8 @@ const FacultyScheduleView: React.FC<FacultyScheduleViewProps> = ({
   useEffect(() => {
     const fetchWeekConfig = async () => {
       try {
-        // 从 LocalStorage 加载周次配置
-        const weekConfigs = JSON.parse(localStorage.getItem('music_scheduler_semester_week_configs') || '[]');
         const currentSemester = getCurrentSemesterLabel();
-        const weekConfigData = weekConfigs.find((c: any) => c.semester_label === currentSemester);
+        const weekConfigData = await weekConfigService.getBySemester(currentSemester);
         
         if (weekConfigData) {
           setTotalWeeks(weekConfigData.total_weeks || 16);
@@ -74,16 +72,6 @@ const FacultyScheduleView: React.FC<FacultyScheduleViewProps> = ({
             startWeek: 1, 
             endWeek: weekConfigData.total_weeks || 16 
           });
-        } else {
-          // 如果没有找到当前学期配置，尝试使用第一个配置
-          if (weekConfigs.length > 0) {
-            const firstConfig = weekConfigs[0];
-            setTotalWeeks(firstConfig.total_weeks || 16);
-            setSelectedWeekRange({ 
-              startWeek: 1, 
-              endWeek: firstConfig.total_weeks || 16 
-            });
-          }
         }
       } catch (error) {
         console.log('周次配置加载失败，使用默认值');
@@ -97,12 +85,10 @@ const FacultyScheduleView: React.FC<FacultyScheduleViewProps> = ({
   useEffect(() => {
     const loadAuxiliaryData = async () => {
       try {
-        // 从 LocalStorage 加载琴房数据
-        const roomsData = JSON.parse(localStorage.getItem('music_scheduler_rooms') || '[]');
+        const roomsData = await roomService.getAll();
         setRooms(roomsData);
         
-        // 从 LocalStorage 加载教师数据
-        const teachersData = JSON.parse(localStorage.getItem('music_scheduler_teachers') || '[]');
+        const teachersData = await teacherService.getAll();
         setTeachers(teachersData);
       } catch (err) {
         console.error('加载辅助数据失败:', err);
@@ -174,8 +160,8 @@ const FacultyScheduleView: React.FC<FacultyScheduleViewProps> = ({
       if (selectedInstrument) {
         // 根据教师的可教课程筛选
         const teacher = teachers.find(t => t.name === schedule.teacherName);
-        if (teacher && (teacher as any).can_teach_courses) {
-          const canTeachCourses = (teacher as any).can_teach_courses as string[];
+        if (teacher && (teacher as any).can_teach_instruments) {
+          const canTeachCourses = (teacher as any).can_teach_instruments as string[];
           if (!canTeachCourses.includes(selectedInstrument)) {
             return false;
           }

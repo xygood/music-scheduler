@@ -5,8 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import localStorageService, { teacherService, studentService, courseService, roomService, scheduleService } from '../services/localStorage';
-const { STORAGE_KEYS } = localStorageService;
+import { teacherService, studentService, courseService, roomService, scheduleService, STORAGE_KEYS } from '../services';
 import * as XLSX from 'xlsx';
 import {
   FACULTIES,
@@ -68,7 +67,7 @@ const Teachers: React.FC = () => {
     name: '',
     faculty_id: 'PIANO',
     position: '讲师',
-    can_teach_courses: [],
+    can_teach_instruments: [],
     max_students_per_class: 5,
     // 新增理论教研室字段
     department: '音乐系'
@@ -139,7 +138,7 @@ const Teachers: React.FC = () => {
       name: '',
       faculty_id: 'PIANO',
       position: '讲师',
-      can_teach_courses: [],
+      can_teach_instruments: [],
       max_students_per_class: 5,
       remarks: ''
     });
@@ -151,7 +150,7 @@ const Teachers: React.FC = () => {
     setIsEditing(true);
     setFormData({
       ...teacher,
-      can_teach_courses: [...teacher.can_teach_courses],
+      can_teach_instruments: [...(teacher.can_teach_instruments || [])],
       remarks: teacher.remarks || ''
     });
     setShowModal(true);
@@ -331,7 +330,7 @@ const Teachers: React.FC = () => {
           position: position,
           hire_date: new Date().toISOString().split('T')[0],
           qualifications: [],
-          can_teach_courses: canTeachCourses,
+          can_teach_instruments: canTeachCourses,
           max_students_per_class: 5,
           remarks: row['备注'] || ''
         };
@@ -536,11 +535,11 @@ const Teachers: React.FC = () => {
 
   // 切换课程选择
   const handleInstrumentToggle = (instrument: string) => {
-    const current = formData.can_teach_courses || [];
+    const current = formData.can_teach_instruments || [];
     if (Array.isArray(current) && current.includes(instrument)) {
-      setFormData({ ...formData, can_teach_courses: current.filter(i => i !== instrument) });
+      setFormData({ ...formData, can_teach_instruments: current.filter(i => i !== instrument) });
     } else {
-      setFormData({ ...formData, can_teach_courses: [...(current || []), instrument] });
+      setFormData({ ...formData, can_teach_instruments: [...(current || []), instrument] });
     }
   };
 
@@ -553,17 +552,17 @@ const Teachers: React.FC = () => {
       vocal: teachersList.filter(t => t && t.faculty_id === 'VOCAL').length,
       instrument: teachersList.filter(t => t && t.faculty_id === 'INSTRUMENT').length,
       theory: teachersList.filter(t => t && t.faculty_id === 'THEORY').length,
-      pianoTeachers: teachersList.filter(t => t && t.faculty_id === 'PIANO' && t.can_teach_courses).map(t => t.can_teach_courses).filter(Boolean).flat(),
-      vocalTeachers: teachersList.filter(t => t && t.faculty_id === 'VOCAL' && t.can_teach_courses).map(t => t.can_teach_courses).filter(Boolean).flat(),
-      instrumentTeachers: teachersList.filter(t => t && t.faculty_id === 'INSTRUMENT' && t.can_teach_courses).map(t => t.can_teach_courses).filter(Boolean).flat(),
-      theoryTeachers: teachersList.filter(t => t && t.faculty_id === 'THEORY' && t.can_teach_courses).map(t => t.can_teach_courses).filter(Boolean).flat(),
+      pianoTeachers: teachersList.filter(t => t && t.faculty_id === 'PIANO' && t.can_teach_instruments).map(t => t.can_teach_instruments).filter(Boolean).flat(),
+      vocalTeachers: teachersList.filter(t => t && t.faculty_id === 'VOCAL' && t.can_teach_instruments).map(t => t.can_teach_instruments).filter(Boolean).flat(),
+      instrumentTeachers: teachersList.filter(t => t && t.faculty_id === 'INSTRUMENT' && t.can_teach_instruments).map(t => t.can_teach_instruments).filter(Boolean).flat(),
+      theoryTeachers: teachersList.filter(t => t && t.faculty_id === 'THEORY' && t.can_teach_instruments).map(t => t.can_teach_instruments).filter(Boolean).flat(),
     };
     
     // 按专业统计
     const instrumentCounts: Record<string, number> = {};
     teachersList.forEach(teacher => {
-      if (teacher && teacher.can_teach_courses && Array.isArray(teacher.can_teach_courses)) {
-        teacher.can_teach_courses.forEach(instrument => {
+      if (teacher && teacher.can_teach_instruments && Array.isArray(teacher.can_teach_instruments)) {
+        teacher.can_teach_instruments.forEach(instrument => {
           if (instrument) {
             instrumentCounts[instrument] = (instrumentCounts[instrument] || 0) + 1;
           }
@@ -711,7 +710,7 @@ const Teachers: React.FC = () => {
                     </td>
                     <td className="py-4 px-4">
                       <div className="flex flex-wrap gap-1">
-                        {(teacher.can_teach_courses || []).map(inst => (
+                        {(teacher.can_teach_instruments || []).map(inst => (
                           <span key={inst} className={`px-2 py-0.5 text-xs rounded-full ${inst === '钢琴' ? 'bg-blue-100 text-blue-700' : inst === '声乐' ? 'bg-green-100 text-green-700' : inst === '音乐理论' ? 'bg-purple-100 text-purple-700' : 'bg-orange-100 text-orange-700'}`}>
                             {inst}
                           </span>
@@ -929,12 +928,12 @@ const Teachers: React.FC = () => {
                         type="button"
                         onClick={() => handleInstrumentToggle(instrument)}
                         className={`flex items-center gap-2 p-2 rounded-lg border transition-all ${
-                          formData.can_teach_courses?.includes(instrument)
+                          formData.can_teach_instruments?.includes(instrument)
                             ? 'border-blue-500 bg-blue-50 text-blue-700'
                             : 'border-gray-200 bg-white hover:border-gray-300'
                         }`}
                       >
-                        {formData.can_teach_courses?.includes(instrument) ? (
+                        {formData.can_teach_instruments?.includes(instrument) ? (
                           <CheckCircle className="w-4 h-4 text-blue-500" />
                         ) : (
                           <div className="w-4 h-4 border-2 border-gray-300 rounded-full" />
@@ -945,7 +944,7 @@ const Teachers: React.FC = () => {
                   </div>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  已选择: {formData.can_teach_courses?.length || 0} 种课程
+                  已选择: {formData.can_teach_instruments?.length || 0} 种课程
                 </p>
               </div>
 
@@ -964,7 +963,7 @@ const Teachers: React.FC = () => {
                   type="button"
                   onClick={handleSave}
                   className="flex-1 btn-primary"
-                  disabled={!formData.teacher_id || !formData.name || (formData.can_teach_courses?.length || 0) === 0}
+                  disabled={!formData.teacher_id || !formData.name || (formData.can_teach_instruments?.length || 0) === 0}
                 >
                   {isEditing ? '保存修改' : '添加教师'}
                 </button>
