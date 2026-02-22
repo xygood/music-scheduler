@@ -2136,7 +2136,7 @@ export const scheduleService = {
     // 添加关联数据
     return filteredClasses.map(cls => ({
       ...cls,
-      courses: courses.find(c => c.id === cls.course_id),
+      courses: courses.find(c => c.id === cls.course_id || (c as any).course_id === cls.course_id),
       rooms: rooms.find(r => r.id === cls.room_id),
       students: students.find(s => s.id === cls.student_id),
     }));
@@ -2159,7 +2159,7 @@ export const scheduleService = {
       // 添加关联数据
       return sortedClasses.map(cls => ({
         ...cls,
-        courses: courses.find(c => c.id === cls.course_id),
+        courses: courses.find(c => c.id === cls.course_id || (c as any).course_id === cls.course_id),
         rooms: rooms.find(r => r.id === cls.room_id),
         students: students.find(s => s.id === cls.student_id),
       }));
