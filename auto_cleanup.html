@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自动清理重复班级数据</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        p {
+            color: #666;
+            line-height: 1.6;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 4px;
+        }
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .log {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+        button:hover {
+            background-color: #0069d9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>自动清理重复班级数据</h1>
+        <p>此页面会自动清理浏览器本地存储中的重复班级数据，移除如"音乐学音乐学2501"这样的重复前缀。</p>
+        <div class="status info" id="status">正在初始化...</div>
+        <div class="log" id="log"></div>
+        <button onclick="location.reload()">重新清理</button>
+    </div>
+
+    <script>
+        // 本地存储键名
+        const STORAGE_KEYS = {
+            CLASSES: 'music_scheduler_classes',
+            COURSES: 'music_scheduler_courses',
+            STUDENTS: 'music_scheduler_students'
+        };
+
+        // 日志函数
+        function log(message) {
+            const logElement = document.getElementById('log');
+            logElement.textContent += message + '\n';
+            logElement.scrollTop = logElement.scrollHeight;
+            console.log(message);
+        }
+
+        // 更新状态
+        function updateStatus(message, type = 'info') {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.className = `status ${type}`;
+        }
+
+        // 清理班级名称的函数
+        function cleanupClassName(className) {
+            if (!className) return className;
+            
+            // 移除重复的前缀
+            if (className.includes('音乐学音乐学')) {
+                className = className.replace('音乐学音乐学', '音乐学');
+            }
+            // 也处理其他可能的重复前缀
+            const prefixRegex = /^(音乐学|舞蹈学|美术学|表演系)\1+/;
+            if (prefixRegex.test(className)) {
+                className = className.replace(prefixRegex, '$1');
+            }
+            return className;
+        }
+
+        // 清理重复班级
+        async function cleanupDuplicateClasses() {
+            try {
+                updateStatus('开始清理重复班级...');
+                log('开始清理重复班级...');
+                
+                // 读取数据
+                const storage = {};
+                for (const key in STORAGE_KEYS) {
+                    const storageKey = STORAGE_KEYS[key];
+                    const value = localStorage.getItem(storageKey);
+                    if (value) {
+                        storage[storageKey] = JSON.parse(value);
+                    } else {
+                        storage[storageKey] = [];
+                    }
+                }
+                
+                let classes = Array.isArray(storage[STORAGE_KEYS.CLASSES]) ? storage[STORAGE_KEYS.CLASSES] : [];
+                let courses = Array.isArray(storage[STORAGE_KEYS.COURSES]) ? storage[STORAGE_KEYS.COURSES] : [];
+                let students = Array.isArray(storage[STORAGE_KEYS.STUDENTS]) ? storage[STORAGE_KEYS.STUDENTS] : [];
+                
+                log(`原始班级数量: ${classes.length}`);
+                log(`原始课程数量: ${courses.length}`);
+                log(`原始学生数量: ${students.length}`);
+                
+                // 清理班级名称
+                const cleanedClasses = [];
+                const classMap = new Map(); // 用于去重和映射旧名称到新名称
+                
+                classes.forEach(cls => {
+                    const cleanedName = cleanupClassName(cls.class_name);
+                    
+                    // 检查是否已存在相同的清理后名称
+                    if (!classMap.has(cleanedName)) {
+                        // 更新班级名称
+                        const updatedClass = {
+                            ...cls,
+                            class_name: cleanedName,
+                            // 同时更新 class_id，确保一致性
+                            class_id: cleanedName.replace('音乐学', '')
+                        };
+                        
+                        cleanedClasses.push(updatedClass);
+                        classMap.set(cleanedName, updatedClass);
+                        
+                        // 同时记录旧名称到新名称的映射
+                        if (cls.class_name !== cleanedName) {
+                            log(`清理班级名称: ${cls.class_name} -> ${cleanedName}`);
+                            classMap.set(cls.class_name, updatedClass);
+                        }
+                    } else {
+                        log(`移除重复班级: ${cls.class_name}`);
+                        // 记录旧名称到新名称的映射
+                        classMap.set(cls.class_name, classMap.get(cleanedName));
+                    }
+                });
+                
+                log(`清理后班级数量: ${cleanedClasses.length}`);
+                
+                // 更新课程中的班级名称
+                const updatedCourses = courses.map(course => {
+                    if (course.major_class) {
+                        const mappedClass = classMap.get(course.major_class);
+                        if (mappedClass) {
+                            log(`更新课程班级: ${course.major_class} -> ${mappedClass.class_name}`);
+                            return {
+                                ...course,
+                                major_class: mappedClass.class_name
+                            };
+                        }
+                    }
+                    return course;
+                });
+                
+                log(`更新后课程数量: ${updatedCourses.length}`);
+                
+                // 更新学生中的班级名称
+                const updatedStudents = students.map(student => {
+                    if (student.major_class) {
+                        const mappedClass = classMap.get(student.major_class);
+                        if (mappedClass) {
+                            log(`更新学生班级: ${student.major_class} -> ${mappedClass.class_name}`);
+                            return {
+                                ...student,
+                                major_class: mappedClass.class_name
+                            };
+                        }
+                    }
+                    if (student.class_name) {
+                        const mappedClass = classMap.get(student.class_name);
+                        if (mappedClass) {
+                            log(`更新学生班级名称: ${student.class_name} -> ${mappedClass.class_name}`);
+                            return {
+                                ...student,
+                                class_name: mappedClass.class_name
+                            };
+                        }
+                    }
+                    return student;
+                });
+                
+                log(`更新后学生数量: ${updatedStudents.length}`);
+                
+                // 更新数据
+                storage[STORAGE_KEYS.CLASSES] = cleanedClasses;
+                storage[STORAGE_KEYS.COURSES] = updatedCourses;
+                storage[STORAGE_KEYS.STUDENTS] = updatedStudents;
+                
+                // 写入数据
+                for (const key in storage) {
+                    localStorage.setItem(key, JSON.stringify(storage[key]));
+                }
+                
+                log('清理完成！');
+                updateStatus('清理完成！班级数据已成功清理。', 'success');
+                
+                // 显示清理结果
+                setTimeout(() => {
+                    const classesJson = localStorage.getItem('music_scheduler_classes');
+                    if (classesJson) {
+                        const classes = JSON.parse(classesJson);
+                        log('清理后的班级列表:');
+                        classes.forEach(cls => {
+                            log(`- ${cls.class_name}`);
+                        });
+                    }
+                }, 500);
+                
+            } catch (error) {
+                console.error('清理失败:', error);
+                log('清理失败: ' + error.message);
+                updateStatus('清理失败: ' + error.message, 'error');
+            }
+        }
+
+        // 页面加载时自动运行清理
+        window.onload = function() {
+            cleanupDuplicateClasses();
+        };
+    </script>
+</body>
+</html>

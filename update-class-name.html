@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>更新通识大课班级名称</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        .button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .button:hover {
+            background-color: #45a049;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>更新通识大课班级名称</h1>
+        <p>点击下方按钮，将所有"音乐学（专升本）2304"改为"音乐学2304"</p>
+        <button class="button" onclick="updateLargeClassClassName()">更新班级名称</button>
+        <div class="result" id="result"></div>
+    </div>
+
+    <script>
+        // 存储键定义
+        const STORAGE_KEYS = {
+            LARGE_CLASS_SCHEDULES: 'music_scheduler_large_class_schedules',
+        };
+
+        function updateLargeClassClassName() {
+            const resultElement = document.getElementById('result');
+            resultElement.textContent = '开始更新...';
+
+            try {
+                // 从localStorage获取通识大课数据
+                const largeClassData = localStorage.getItem(STORAGE_KEYS.LARGE_CLASS_SCHEDULES);
+                
+                if (!largeClassData) {
+                    resultElement.textContent = '没有找到通识大课数据';
+                    return;
+                }
+
+                const schedules = JSON.parse(largeClassData);
+                
+                if (!Array.isArray(schedules)) {
+                    resultElement.textContent = '通识大课数据格式错误';
+                    return;
+                }
+
+                let updatedCount = 0;
+
+                // 遍历所有通识大课数据
+                schedules.forEach(schedule => {
+                    if (schedule.entries && Array.isArray(schedule.entries)) {
+                        // 遍历每个课程条目
+                        schedule.entries.forEach(entry => {
+                            if (entry.class_name === '音乐学（专升本）2304') {
+                                entry.class_name = '音乐学2304';
+                                updatedCount++;
+                            }
+                        });
+                    }
+                });
+
+                // 保存更新后的数据
+                localStorage.setItem(STORAGE_KEYS.LARGE_CLASS_SCHEDULES, JSON.stringify(schedules));
+
+                resultElement.textContent = `成功更新了 ${updatedCount} 条通识大课数据中的班级名称\n已将所有"音乐学（专升本）2304"改为"音乐学2304"`;
+            } catch (error) {
+                resultElement.textContent = `更新通识大课数据失败: ${error.message}`;
+            }
+        }
+
+        // 页面加载时显示当前数据状态
+        window.onload = function() {
+            const resultElement = document.getElementById('result');
+            try {
+                const largeClassData = localStorage.getItem(STORAGE_KEYS.LARGE_CLASS_SCHEDULES);
+                if (largeClassData) {
+                    const schedules = JSON.parse(largeClassData);
+                    let count = 0;
+                    schedules.forEach(schedule => {
+                        if (schedule.entries && Array.isArray(schedule.entries)) {
+                            schedule.entries.forEach(entry => {
+                                if (entry.class_name === '音乐学（专升本）2304') {
+                                    count++;
+                                }
+                            });
+                        }
+                    });
+                    resultElement.textContent = `当前数据中有 ${count} 条记录包含"音乐学（专升本）2304"`;
+                } else {
+                    resultElement.textContent = '没有找到通识大课数据';
+                }
+            } catch (error) {
+                resultElement.textContent = `读取数据失败: ${error.message}`;
+            }
+        };
+    </script>
+</body>
+</html>
