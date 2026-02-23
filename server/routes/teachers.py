@@ -32,9 +32,12 @@ def create_teacher():
     db = next(get_db())
     try:
         data = request.get_json()
+        teacher_id = data.get('teacher_id')
+        if not teacher_id:
+            return jsonify({'error': 'Teacher ID is required'}), 400
         teacher = Teacher(
-            id=str(uuid.uuid4()),
-            teacher_id=data.get('teacher_id'),
+            id=teacher_id,  # 使用工号作为ID
+            teacher_id=teacher_id,
             name=data.get('name'),
             full_name=data.get('full_name', data.get('name')),
             email=data.get('email'),
@@ -70,8 +73,18 @@ def update_teacher(teacher_id):
         if not teacher:
             return jsonify({'error': 'Teacher not found'}), 404
         data = request.get_json()
+        
+        # 允许的字段白名单
+        ALLOWED_FIELDS = [
+            'name', 'full_name', 'email', 'phone', 'department',
+            'faculty_id', 'faculty_code', 'faculty_name', 'position',
+            'status', 'primary_instrument', 'can_teach_instruments',
+            'max_students_per_class', 'fixed_room_id', 'fixed_rooms',
+            'qualifications', 'remarks'
+        ]
+        
         for key, value in data.items():
-            if hasattr(teacher, key) and key not in ['id', 'created_at']:
+            if key in ALLOWED_FIELDS and hasattr(teacher, key):
                 setattr(teacher, key, value)
         db.commit()
         return jsonify(teacher.to_dict())
@@ -105,9 +118,12 @@ def batch_create_teachers():
         teachers_data = data.get('teachers', [])
         created = []
         for t_data in teachers_data:
+            teacher_id = t_data.get('teacher_id')
+            if not teacher_id:
+                continue  # 跳过没有工号的教师数据
             teacher = Teacher(
-                id=str(uuid.uuid4()),
-                teacher_id=t_data.get('teacher_id'),
+                id=teacher_id,  # 使用工号作为ID
+                teacher_id=teacher_id,
                 name=t_data.get('name'),
                 full_name=t_data.get('full_name', t_data.get('name')),
                 email=t_data.get('email'),

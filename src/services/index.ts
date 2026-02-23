@@ -444,6 +444,7 @@ export const weekConfigService = {
 
 export const largeClassScheduleService = localStorageService.largeClassScheduleService;
 export const studentTeacherAssignmentService = localStorageService.studentTeacherAssignmentService;
+export const operationLogService = localStorageService.operationLogService;
 
 export const syncService = {
   async getAll() {

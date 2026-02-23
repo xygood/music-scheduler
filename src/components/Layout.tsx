@@ -53,13 +53,13 @@ export default function Layout() {
 
   useEffect(() => {
     const checkTeacherCourses = () => {
-      if (!teacher?.teacher_id && !user?.teacher_id) {
+      if (!teacher?.id && !user?.teacher_id) {
         setHasMajorCourses(false);
         setHasIndividualCourses(false);
         return;
       }
 
-      const teacherId = teacher?.teacher_id || user?.teacher_id;
+      const teacherId = teacher?.id || user?.teacher_id;
       const teacherName = teacher?.name || user?.full_name;
 
       try {
@@ -110,8 +110,6 @@ export default function Layout() {
   // 教师可见的核心功能菜单
   const teacherMenuItems = [
     { path: '/', icon: Home, label: '数据统计' },
-    // 排课建议：教师有专业小课或者是管理员才显示
-    ...(hasIndividualCourses || isAdmin ? [{ path: '/priority-suggestion', icon: Lightbulb, label: '排课建议' }] : []),
     // 专业小课：教师有专业小课或者是管理员才显示
     ...(hasIndividualCourses || isAdmin ? [{ path: '/arrange-class', icon: CalendarPlus, label: '专业小课' }] : []),
     // 专业大课：教师有专业大课或者是管理员才显示
@@ -144,6 +142,7 @@ export default function Layout() {
     { path: '/week-config', icon: Calendar, label: '周次配置' },
     { path: '/backup', icon: Database, label: '数据备份' },
     { path: '/large-class', icon: BookOpen, label: '通适大课' },
+    { path: '/operation-logs', icon: ClipboardList, label: '操作日志' },
   ];
 
   // 测试菜单

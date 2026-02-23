@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { teacherService, studentService, courseService, roomService, scheduleService, STORAGE_KEYS } from '../services';
+import { teacherService, studentService, courseService, roomService, scheduleService, STORAGE_KEYS, operationLogService } from '../services';
 import * as XLSX from 'xlsx';
 import {
   FACULTIES,
@@ -360,6 +360,15 @@ const Teachers: React.FC = () => {
         failed: skipped,
         details
       });
+
+      // 记录操作日志
+      await operationLogService.log(
+        '导入教师数据',
+        'system',
+        `导入教师数据：新增 ${created} 位，更新 ${updated} 位，跳过 ${skipped} 位`,
+        undefined,
+        undefined
+      );
 
       // 重新加载教师数据
       const teachersData = await teacherService.getAll();

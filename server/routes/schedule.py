@@ -4,6 +4,7 @@ from models.schedule import ScheduledClass
 from . import api_bp
 import uuid
 from datetime import datetime
+from websocket_handlers import broadcast_schedule_created, broadcast_schedule_updated, broadcast_schedule_deleted
 
 @api_bp.route('/schedules', methods=['GET'])
 def get_schedules():
@@ -62,6 +63,10 @@ def create_schedule():
         )
         db.add(schedule)
         db.commit()
+        
+        # 广播给其他客户端
+        broadcast_schedule_created(schedule.to_dict())
+        
         return jsonify(schedule.to_dict()), 201
     except Exception as e:
         db.rollback()
@@ -85,6 +90,10 @@ def update_schedule(schedule_id):
                 setattr(schedule, key, value)
         
         db.commit()
+        
+        # 广播给其他客户端
+        broadcast_schedule_updated(schedule.to_dict())
+        
         return jsonify(schedule.to_dict())
     except Exception as e:
         db.rollback()
@@ -102,6 +111,10 @@ def delete_schedule(schedule_id):
         
         db.delete(schedule)
         db.commit()
+        
+        # 广播给其他客户端
+        broadcast_schedule_deleted(schedule_id)
+        
         return jsonify({'message': 'Schedule deleted successfully'})
     except Exception as e:
         db.rollback()

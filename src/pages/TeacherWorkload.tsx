@@ -273,7 +273,7 @@ export default function TeacherWorkload() {
             const teacherSchedules = schedules;
             
             // 获取教师信息
-            const teacherInfo = allTeachers.find(t => t.id === teacherId);
+            const teacherInfo = allTeachers.find(t => t.teacher_id === teacherId || t.id === teacherId);
             const teacherName = teacherInfo?.name || teacherSchedules[0]?.teacher_name || '未知教师';
             const facultyName = teacherInfo?.faculty_name || '未知教研室';
             

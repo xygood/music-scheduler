@@ -117,6 +117,14 @@ export const blockedSlotsApi = {
   batchCreate: (blocked_slots: any[]) => api.post<any[]>('/blocked-slots/batch', { blocked_slots }),
 };
 
+export const largeClassScheduleApi = {
+  getAll: () => api.get<any[]>('/large-class-schedules'),
+  getById: (id: string) => api.get<any>(`/large-class-schedules/${id}`),
+  create: (data: any) => api.post<any>('/large-class-schedules', data),
+  update: (id: string, data: any) => api.put<any>(`/large-class-schedules/${id}`, data),
+  delete: (id: string) => api.delete(`/large-class-schedules/${id}`),
+};
+
 export const classesApi = {
   getAll: () => api.get<any[]>('/classes'),
   getById: (id: string) => api.get<any>(`/classes/${id}`),

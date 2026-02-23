@@ -4,6 +4,15 @@ import type { Teacher, Student, Course, Room, ScheduledClass, Conflict, FACULTIE
 import { setTeacherRoomByFaculty, getFacultyCodeForInstrument } from '../types';
 import DataConsistencyService from './dataConsistencyService';
 
+// 密码哈希函数 - 使用简单的 SHA-256
+async function hashPassword(password: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 // 类型定义 - 兼容旧版本的department字段
 interface User {
   id: string;
@@ -35,6 +44,21 @@ interface Session {
   user: User | null;
 }
 
+// 操作日志类型
+interface OperationLog {
+  id: string;
+  teacher_id: string;
+  teacher_name: string;
+  operation: string;
+  target_type: 'schedule' | 'student' | 'course' | 'room' | 'system' | 'other';
+  target_id?: string;
+  target_name?: string;
+  details: string;
+  ip_address?: string;
+  user_agent?: string;
+  timestamp: string;
+}
+
 // 存储键
 export const STORAGE_KEYS = {
   USERS: 'music_scheduler_users',
@@ -51,6 +75,8 @@ export const STORAGE_KEYS = {
   LARGE_CLASS_SCHEDULES: 'music_scheduler_large_class_schedules',
   // 新增：学生-教师分配相关存储键
   STUDENT_TEACHER_ASSIGNMENTS: 'music_scheduler_student_teacher_assignments',
+  // 新增：操作日志存储键
+  OPERATION_LOGS: 'music_scheduler_operation_logs',
   STUDENT_MAJOR_ASSIGNMENTS: 'music_scheduler_student_major_assignments',
   // 新增：在线教师状态和多用户登录
   ONLINE_TEACHERS: 'music_scheduler_online_teachers',
@@ -115,7 +141,7 @@ const _initializeDemoData = async () => {
   if (!localStorage.getItem(STORAGE_KEYS.TEACHERS)) {
     const initialTeachers: Teacher[] = [
       {
-        id: 't1',
+        id: '12015001',
         teacher_id: '12015001',
         name: '张老师',
         faculty_id: 'PIANO',
@@ -132,7 +158,7 @@ const _initializeDemoData = async () => {
         created_at: '2018-09-01T00:00:00Z'
       },
       {
-        id: 't2',
+        id: '12015002',
         teacher_id: '12015002',
         name: '李老师',
         faculty_id: 'VOCAL',
@@ -149,7 +175,7 @@ const _initializeDemoData = async () => {
         created_at: '2015-03-15T00:00:00Z'
       },
       {
-        id: 't3',
+        id: '12015003',
         teacher_id: '12015003',
         name: '王老师',
         faculty_id: 'INSTRUMENT',
@@ -166,7 +192,7 @@ const _initializeDemoData = async () => {
         created_at: '2020-07-01T00:00:00Z'
       },
       {
-        id: 't4',
+        id: '12015004',
         teacher_id: '12015004',
         name: '赵老师',
         faculty_id: 'PIANO',
@@ -182,7 +208,7 @@ const _initializeDemoData = async () => {
         created_at: '2022-09-01T00:00:00Z'
       },
       {
-        id: 't5',
+        id: '12015005',
         teacher_id: '12015005',
         name: '陈老师',
         faculty_id: 'VOCAL',
@@ -287,11 +313,14 @@ export const authService = {
     // 获取教研室信息
     const faculty = FACULTY_CONFIG.find(f => f.faculty_code === facultyCode);
 
+    // 哈希密码
+    const hashedPassword = await hashPassword(password);
+
     const newUser: User = {
       id: uuidv4(),
       teacher_id: `T${Date.now().toString().slice(-6)}`,
       email,
-      password, // 注意：生产环境中不应存储明文密码
+      password: hashedPassword, // 存储哈希后的密码
       full_name: fullName,
       department: faculty?.faculty_name || '', // 兼容旧版本
       faculty_id: faculty?.faculty_code, // 使用faculty_code作为ID
@@ -303,8 +332,9 @@ export const authService = {
     users.push(newUser);
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
 
-    // 自动登录
-    localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(newUser));
+    // 自动登录（不存储密码）
+    const { password: _, ...userWithoutPassword } = newUser;
+    localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(userWithoutPassword));
 
     return { user: newUser };
   },
@@ -355,34 +385,24 @@ export const authService = {
 
     let users: User[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '[]');
     
-    // 调试信息
-    console.log('=== 登录调试信息 ===');
-    console.log('输入工号:', teacherId);
-    console.log('输入密码:', password);
-    console.log('预期密码:', teacherId + '123');
-    console.log('用户总数:', users.length);
-    
     // 查找工号匹配的用户
     let user = users.find(u => u.teacher_id === teacherId);
     
     // 如果用户不存在，检查是否有对应的教师数据并自动创建
     if (!user) {
-      console.log(`🔍 未找到工号 ${teacherId} 对应的用户账号，正在检查教师数据...`);
-      
       // 检查是否有对应的教师数据
       const teachers: Teacher[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.TEACHERS) || '[]');
       const teacher = teachers.find(t => t.teacher_id === teacherId);
       
       if (teacher) {
-        console.log(`✅ 找到教师数据: ${teacher.name} (${teacher.teacher_id})，正在创建用户账号...`);
-        
-        // 为教师创建用户账号
+        // 为教师创建用户账号（使用哈希密码）
         const defaultPassword = teacherId === '110' ? '135' : teacherId + '123';
+        const hashedPassword = await hashPassword(defaultPassword);
         const newUser: User = {
           id: `user-${teacher.id}`,
           teacher_id: teacher.teacher_id,
           email: `${teacher.teacher_id}@music.edu.cn`,
-          password: defaultPassword,
+          password: hashedPassword,
           full_name: teacherId === '110' ? '谷歌' : teacher.name,
           department: teacherId === '110' ? '系统管理' : teacher.faculty_name || '',
           faculty_id: teacherId === '110' ? 'ADMIN' : teacher.faculty_id,
@@ -394,18 +414,16 @@ export const authService = {
         users.push(newUser);
         localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
         user = newUser;
-        console.log(`✅ 用户账号已自动创建: ${teacher.teacher_id} / ${defaultPassword}`);
       } else {
-        console.log(`⚠️ 未找到工号 ${teacherId} 对应的教师数据，但仍为该工号创建基本用户账号...`);
-        
         // 即使没有教师数据，也为该工号创建一个基本的用户账号
         const defaultPassword = teacherId === '110' ? '135' : teacherId + '123';
+        const hashedPassword = await hashPassword(defaultPassword);
         const newUser: User = {
           id: `user-temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           teacher_id: teacherId,
           email: `${teacherId}@music.edu.cn`,
-          password: defaultPassword,
-          full_name: teacherId === '110' ? '谷歌' : '用户' + teacherId, // 管理员使用固定名称
+          password: hashedPassword,
+          full_name: teacherId === '110' ? '谷歌' : '用户' + teacherId,
           department: teacherId === '110' ? '系统管理' : '音乐系',
           faculty_id: teacherId === '110' ? 'ADMIN' : 'PIANO',
           faculty_code: 'PIANO',
@@ -416,39 +434,20 @@ export const authService = {
         users.push(newUser);
         localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
         user = newUser;
-        console.log(`✅ 基本用户账号已自动创建: ${teacherId} / ${defaultPassword}`);
-        console.log(`💡 建议导入完整的教师数据以获得更完整的用户信息`);
       }
     }
     
     // 如果仍然没有找到用户（包括教师数据），抛出错误
     if (!user) {
-      console.log('❌ 未找到工号匹配的用户');
-      // 显示所有工号用于调试
-      const allTeacherIds = users.map(u => u.teacher_id);
-      console.log('现有工号:', allTeacherIds);
       throw new Error(`工号 ${teacherId} 不存在，请检查工号是否正确`);
     }
     
-    console.log('✅ 找到用户:', user.full_name);
-    console.log('用户存储的密码:', user.password);
+    // 验证密码（使用哈希比较）
+    const inputPasswordHash = await hashPassword(password);
     
-    // 验证密码
-    let expectedPassword = teacherId + '123';
-    
-    if (teacherId === '110') {
-      expectedPassword = '135';
-    }
-    
-    if (user.password !== expectedPassword) {
-      console.log('❌ 密码不匹配');
-      console.log('输入密码:', password);
-      console.log('预期密码:', expectedPassword);
-      console.log('实际密码:', user.password);
+    if (user.password !== inputPasswordHash) {
       throw new Error('密码错误，请检查工号和密码');
     }
-    
-    console.log('✅ 登录成功');
     
     // 使用 sessionStorage 存储当前用户，支持多标签页独立登录
     sessionStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(user));
@@ -710,9 +709,14 @@ export const teacherService = {
 
       const teachers = getDataWithStatus<Teacher>(STORAGE_KEYS.TEACHERS, true);
 
+      // 使用工号作为唯一ID
+      if (!teacher.teacher_id) {
+        throw new Error('教师工号是必填项');
+      }
+
       const newTeacher: Teacher = {
         ...teacher,
-        id: `t${Date.now()}`,
+        id: teacher.teacher_id, // 使用工号作为ID
         created_at: new Date().toISOString(),
         status: 'active'
       };
@@ -755,12 +759,13 @@ export const teacherService = {
       const existing = teacherMap.get(teacher.teacher_id);
       if (existing) {
         // 更新现有教师
-        const index = updatedTeachers.findIndex(t => t.id === existing.id);
+        const index = updatedTeachers.findIndex(t => t.teacher_id === teacher.teacher_id);
         if (index !== -1) {
           updatedTeachers[index] = {
             ...existing,
             ...teacher,
             updated_at: new Date().toISOString(),
+            id: teacher.teacher_id // 确保ID是工号
           };
         }
         updated++;
@@ -768,7 +773,7 @@ export const teacherService = {
         // 创建新教师
         const newTeacher: Teacher = {
           ...teacher,
-          id: `t${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          id: teacher.teacher_id, // 使用工号作为ID
           created_at: new Date().toISOString(),
         };
         updatedTeachers.push(newTeacher);
@@ -813,8 +818,8 @@ export const teacherService = {
     await new Promise(resolve => setTimeout(resolve, 200));
 
     const teachers: Teacher[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.TEACHERS) || '[]');
-    // 先通过工号精确匹配
-    let teacher = teachers.find(t => t.teacher_id === teacherId);
+    // 先通过工号或ID精确匹配（现在ID也是工号）
+    let teacher = teachers.find(t => t.teacher_id === teacherId || t.id === teacherId);
     if (teacher) return teacher;
     // 如果没找到，尝试通过姓名匹配（模糊匹配）
     return teachers.find(t => t.name?.includes(teacherId) || t.full_name?.includes(teacherId)) || null;
@@ -1343,7 +1348,18 @@ export const studentService = {
     await new Promise(resolve => setTimeout(resolve, 200));
 
     const students: Student[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.STUDENTS) || '[]');
-    return students.filter(s => s.teacher_id === teacherId).sort((a, b) => a.name.localeCompare(b.name));
+    return students.filter(s => {
+      // 主项教师匹配（同时检查 teacher_id 和 id，因为现在教师ID统一为工号）
+      if (s.teacher_id === teacherId) return true;
+      // assigned_teachers 匹配（主项和副项）
+      if (s.assigned_teachers) {
+        return s.assigned_teachers.primary_teacher_id === teacherId ||
+               s.assigned_teachers.secondary1_teacher_id === teacherId ||
+               s.assigned_teachers.secondary2_teacher_id === teacherId ||
+               s.assigned_teachers.secondary3_teacher_id === teacherId;
+      }
+      return false;
+    }).sort((a, b) => a.name.localeCompare(b.name));
   },
 
   async getAll(): Promise<Student[]> {
@@ -2669,6 +2685,154 @@ export const largeClassScheduleService = {
     await new Promise(resolve => setTimeout(resolve, 200));
     localStorage.setItem(STORAGE_KEYS.LARGE_CLASS_SCHEDULES, JSON.stringify([]));
   },
+};
+
+// ==================== 操作日志服务 ====================
+
+// 获取当前用户信息
+function getCurrentUserInfo(): { teacher_id: string; teacher_name: string } | null {
+  try {
+    const userStr = sessionStorage.getItem(STORAGE_KEYS.CURRENT_USER) || 
+                   localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      return {
+        teacher_id: user.teacher_id || user.id,
+        teacher_name: user.full_name || user.name || '未知用户'
+      };
+    }
+  } catch (e) {
+    console.error('获取当前用户信息失败:', e);
+  }
+  return null;
+}
+
+// 操作日志服务
+export const operationLogService = {
+  // 记录操作日志
+  async log(
+    operation: string,
+    targetType: 'schedule' | 'student' | 'course' | 'room' | 'system' | 'other',
+    details: string,
+    targetId?: string,
+    targetName?: string
+  ): Promise<OperationLog> {
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    const userInfo = getCurrentUserInfo();
+    const logs: OperationLog[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.OPERATION_LOGS) || '[]');
+
+    const newLog: OperationLog = {
+      id: uuidv4(),
+      teacher_id: userInfo?.teacher_id || 'unknown',
+      teacher_name: userInfo?.teacher_name || '未知用户',
+      operation,
+      target_type: targetType,
+      target_id: targetId,
+      target_name: targetName,
+      details,
+      ip_address: undefined, // 浏览器环境无法获取真实IP
+      user_agent: navigator.userAgent,
+      timestamp: new Date().toISOString(),
+    };
+
+    logs.unshift(newLog); // 新日志在前面
+    
+    // 只保留最近1000条日志
+    if (logs.length > 1000) {
+      logs.length = 1000;
+    }
+    
+    localStorage.setItem(STORAGE_KEYS.OPERATION_LOGS, JSON.stringify(logs));
+
+    return newLog;
+  },
+
+  // 获取所有日志
+  async getAll(): Promise<OperationLog[]> {
+    await new Promise(resolve => setTimeout(resolve, 200));
+    const logs: OperationLog[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.OPERATION_LOGS) || '[]');
+    return logs;
+  },
+
+  // 根据教师ID获取日志
+  async getByTeacher(teacherId: string): Promise<OperationLog[]> {
+    await new Promise(resolve => setTimeout(resolve, 200));
+    const logs: OperationLog[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.OPERATION_LOGS) || '[]');
+    return logs.filter(log => log.teacher_id === teacherId);
+  },
+
+  // 根据操作类型获取日志
+  async getByTargetType(targetType: string): Promise<OperationLog[]> {
+    await new Promise(resolve => setTimeout(resolve, 200));
+    const logs: OperationLog[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.OPERATION_LOGS) || '[]');
+    return logs.filter(log => log.target_type === targetType);
+  },
+
+  // 根据时间范围获取日志
+  async getByTimeRange(startTime: string, endTime: string): Promise<OperationLog[]> {
+    await new Promise(resolve => setTimeout(resolve, 200));
+    const logs: OperationLog[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.OPERATION_LOGS) || '[]');
+    return logs.filter(log => log.timestamp >= startTime && log.timestamp <= endTime);
+  },
+
+  // 搜索日志
+  async search(keyword: string): Promise<OperationLog[]> {
+    await new Promise(resolve => setTimeout(resolve, 200));
+    const logs: OperationLog[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.OPERATION_LOGS) || '[]');
+    const lowerKeyword = keyword.toLowerCase();
+    return logs.filter(log => 
+      log.teacher_name.toLowerCase().includes(lowerKeyword) ||
+      log.operation.toLowerCase().includes(lowerKeyword) ||
+      log.details.toLowerCase().includes(lowerKeyword) ||
+      log.target_name?.toLowerCase().includes(lowerKeyword)
+    );
+  },
+
+  // 清空日志（仅管理员）
+  async clearAll(): Promise<void> {
+    await new Promise(resolve => setTimeout(resolve, 200));
+    localStorage.setItem(STORAGE_KEYS.OPERATION_LOGS, JSON.stringify([]));
+  },
+
+  // 导出日志为CSV
+  exportToCSV(logs: OperationLog[]): string {
+    const headers = ['时间', '教师工号', '教师姓名', '操作', '对象类型', '对象名称', '详情', 'User-Agent'];
+    const rows = logs.map(log => [
+      new Date(log.timestamp).toLocaleString('zh-CN'),
+      log.teacher_id,
+      log.teacher_name,
+      log.operation,
+      log.target_type,
+      log.target_name || '-',
+      log.details,
+      log.user_agent
+    ]);
+    
+    return [headers.join(','), ...rows.map(row => row.map(cell => `"${cell}"`).join(','))].join('\n');
+  },
+
+  // 记录登录
+  async logLogin(teacherId: string, teacherName: string): Promise<OperationLog> {
+    return this.log(
+      '登录系统',
+      'system',
+      '教师登录系统',
+      teacherId,
+      teacherName
+    );
+  },
+
+  // 记录登出
+  async logLogout(teacherId: string, teacherName: string): Promise<OperationLog> {
+    return this.log(
+      '退出登录',
+      'system',
+      '教师退出登录',
+      teacherId,
+      teacherName
+    );
+  }
 };
 
 // 新增：学生-教师分配服务

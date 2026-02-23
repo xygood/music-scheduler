@@ -162,11 +162,11 @@ const TimeGrid: React.FC<TimeGridProps> = ({
         <div className="min-w-[800px]">
           {/* 星期表头 */}
           <div className="grid grid-cols-8 gap-1 mb-1">
-            <div className="col-span-1 flex items-center justify-center py-2 bg-gray-100 rounded-md font-medium">
+            <div className="col-span-1 flex flex-col items-center justify-center py-2 bg-gray-100 rounded-md font-medium min-h-[60px]">
               节次
             </div>
             {WEEKDAYS.map(day => (
-              <div key={day.value} className="flex flex-col items-center justify-center py-2 bg-gray-100 rounded-md font-medium">
+              <div key={day.value} className="flex flex-col items-center justify-center py-2 bg-gray-100 rounded-md font-medium min-h-[60px]">
                 <span>{day.label}</span>
                 <span className="text-xs text-gray-500 font-normal">{getDayDate(selectedWeek, day.value)}</span>
               </div>

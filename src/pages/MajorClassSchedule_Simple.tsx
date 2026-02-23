@@ -6,27 +6,8 @@ import type { LargeClassEntry } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import * as XLSX from 'xlsx';
 import {
-  Calendar,
-  Users,
-  BookOpen,
-  Building,
   Clock,
-  CheckCircle,
-  XCircle,
-  AlertTriangle,
-  ChevronDown,
-  Save,
-  Trash2,
-  Copy,
-  Play,
-  Pause,
-  Check,
-  Info,
-  CalendarDays,
-  Plus,
-  Edit,
-  X,
-  Zap
+  Save
 } from 'lucide-react';
 import type { Course, Room } from '../types';
 
@@ -40,14 +21,24 @@ import ScheduleResult from '../components/MajorClassSchedule/ScheduleResult';
 import ConflictDetector from '../components/MajorClassSchedule/ConflictDetector';
 
 // 导入类型和工具函数
-import { WEEKDAYS, CourseStatus, CourseScheduleStatus, Class, TimeSlot, Conflict, Schedule, GroupedSchedule, TimeGridStatus, CopyOptions } from '../components/MajorClassSchedule/types';
+import { WEEKDAYS, CourseStatus, CourseScheduleStatus, Class } from '../components/MajorClassSchedule/types';
 import { getWeekRange, isWeekBlocked, isSlotAvailable, getActualIndex, generateDefaultCourseStatus, generateScheduleRecord, detectConflicts, processBatchSelection } from '../components/MajorClassSchedule/utils';
 
 
 export default function MajorClassSchedule() {
   const { user, teacher, isAdmin } = useAuth();
+// 加载状态
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  
+  // 自动保存状态
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [showSaveNotification, setShowSaveNotification] = useState(false);
+  
+  // 批量模式状态
+  const [batchWeeks, setBatchWeeks] = useState<number[]>([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
+  const [batchDay, setBatchDay] = useState<number>(2);
+  const [batchPeriods, setBatchPeriods] = useState<number[]>([4]);
   const [progress, setProgress] = useState(0);
   const [showProgress, setShowProgress] = useState(false);
   
@@ -84,9 +75,7 @@ export default function MajorClassSchedule() {
   };
 
   // 学年学期状态 - 使用系统默认学期
-  const [selectedAcademicYear, setSelectedAcademicYear] = useState(getCurrentAcademicYear());
   const [selectedSemesterLabel, setSelectedSemesterLabel] = useState(getCurrentSemesterLabel());
-  const [selectedSemester, setSelectedSemester] = useState(2);
   
   // 学期开始日期 - 从周次配置中获取
   const [semesterStartDate, setSemesterStartDate] = useState<string>('');
@@ -123,31 +112,18 @@ export default function MajorClassSchedule() {
   const [selectedTimeSlots, setSelectedTimeSlots] = useState<Array<{week: number, day: number, period: number}>>([]);
   
   // 时间选择模式
-  const [selectionMode, setSelectionMode] = useState<'single' | 'range' | 'batch'>('batch');
+  const [selectionMode, setSelectionMode] = useState<'single' | 'batch'>('batch');
   
   // 框选模式状态
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<{day: number, period: number} | null>(null);
   const [dragEnd, setDragEnd] = useState<{day: number, period: number} | null>(null);
   
-  // 批量模式状态
-  const [batchWeeks, setBatchWeeks] = useState<number[]>([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
-  const [batchDay, setBatchDay] = useState<number>(2);
-  const [batchPeriods, setBatchPeriods] = useState<number[]>([4]);
-  
   // 冲突检测状态
   const [conflicts, setConflicts] = useState<Array<{week: number, day: number, period: number, type: 'room' | 'time' | 'class', message: string, suggestion: string}>>([]);
   
-  // 自动保存状态
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
-  const [showSaveNotification, setShowSaveNotification] = useState(false);
-  
   // 批量选择状态
   const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
-  const [batchModeActive, setBatchModeActive] = useState(false);
-  
-  // 合班上课状态
-  const [combinedClasses, setCombinedClasses] = useState<string[]>([]);
   
   // 禁排时段状态
   const [blockedSlots, setBlockedSlots] = useState<any[]>([]);
@@ -172,8 +148,7 @@ export default function MajorClassSchedule() {
     reason: ''
   });
   
-  // 文件输入引用
-  const fileInputRef = useRef<HTMLInputElement>(null);
+
   
   // 解析周次范围字符串，返回包含的周次数组
   const parseWeekRange = useCallback((weekRange: string): number[] => {
@@ -203,7 +178,7 @@ export default function MajorClassSchedule() {
     }
     
     // 去重并排序
-    return [...new Set(weeks)].sort((a, b) => a - b);
+    return [...new Set(weeks)].sort((a, b) => Number(a) - Number(b));
   }, []);
 
   // 解析节次范围字符串，返回包含的节次数组
@@ -292,56 +267,7 @@ export default function MajorClassSchedule() {
   }, []);
 
   // 处理禁排时间导入
-  const handleImportBlockedTimes = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
-
-        // 转换数据格式
-        const importedData = jsonData.map((item: any) => {
-          const weeks = parseWeekRange(item['周次'] || '');
-          const day = parseDay(item['星期'] || '');
-          const periods = parsePeriods(item['节次'] || '');
-          
-          return {
-            class_name: item['班级'] || '',
-            weeks,
-            day,
-            periods,
-            reason: item['禁排原因'] || ''
-          };
-        }).filter((item: any) => item.weeks.length > 0 && item.day > 0 && item.periods.length > 0);
-
-        // 保存导入的数据
-        setImportedBlockedTimes(importedData);
-        
-        // 保存到本地存储
-        localStorage.setItem('music_scheduler_imported_blocked_times', JSON.stringify(importedData));
-        
-        setImportSuccess(true);
-        setTimeout(() => setImportSuccess(false), 3000);
-      } catch (error) {
-        console.error('导入禁排时间失败:', error);
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  }, [parseWeekRange, parseDay, parsePeriods]);
-
-  // 清除禁排时间
-  const handleClearImportedBlockedTimes = useCallback(() => {
-    if (window.confirm('确定要清除所有禁排时间吗？')) {
-      setImportedBlockedTimes([]);
-      localStorage.removeItem('music_scheduler_imported_blocked_times');
-      setImportSuccess(false);
-    }
-  }, []);
 
   // 从禁排时间中移除课程的禁排记录
   const removeScheduleFromBlockedTimes = useCallback((courseId: string, classId: string) => {
@@ -414,7 +340,7 @@ export default function MajorClassSchedule() {
       const teacherName = course.teacher_name || '未知教师';
       
       // 获取教室信息
-      const roomInfo = rooms.find(r => r.id === (selectedRoom || course.room_id));
+      const roomInfo = rooms.find(r => r.id === selectedRoom) || rooms[0];
       const roomName = roomInfo?.room_name || '未知教室';
       
       // 按班级、星期、禁排原因分组，收集所有周次和节次
@@ -483,8 +409,8 @@ export default function MajorClassSchedule() {
         if (existingIndex >= 0) {
           // 合并周次和节次
           const existingItem = updatedBlockedTimes[existingIndex];
-          const mergedWeeks = [...new Set([...existingItem.weeks, ...newItem.weeks])].sort((a, b) => a - b);
-          const mergedPeriods = [...new Set([...existingItem.periods, ...newItem.periods])].sort((a, b) => a - b);
+          const mergedWeeks = [...new Set([...existingItem.weeks, ...newItem.weeks])].sort((a, b) => Number(a) - Number(b));
+          const mergedPeriods = [...new Set([...existingItem.periods, ...newItem.periods])].sort((a, b) => Number(a) - Number(b));
           updatedBlockedTimes[existingIndex] = {
             ...existingItem,
             weeks: mergedWeeks,
@@ -593,7 +519,7 @@ export default function MajorClassSchedule() {
         if (existingIndex >= 0) {
           // 合并周次
           const existingItem = updatedBlockedTimes[existingIndex];
-          const mergedWeeks = [...new Set([...existingItem.weeks, ...newItem.weeks])].sort((a, b) => a - b);
+          const mergedWeeks = [...new Set([...existingItem.weeks, ...newItem.weeks])].sort((a, b) => Number(a) - Number(b));
           updatedBlockedTimes[existingIndex] = {
             ...existingItem,
             weeks: mergedWeeks
@@ -664,9 +590,9 @@ export default function MajorClassSchedule() {
         if (weeks.length > 0 && periods.length > 0 && slot.day_of_week) {
           newBlockedTimes.push({
             class_name: className,
-            weeks: [...new Set(weeks)].sort((a, b) => a - b),
+            weeks: [...new Set(weeks)].sort((a, b) => Number(a) - Number(b)),
             day: slot.day_of_week,
-            periods: [...new Set(periods)].sort((a, b) => a - b),
+            periods: [...new Set(periods)].sort((a, b) => Number(a) - Number(b)),
             reason: slot.reason || '禁排时间'
           });
         }
@@ -693,8 +619,8 @@ export default function MajorClassSchedule() {
         
         if (existingIndex >= 0) {
           const existingItem = updatedBlockedTimes[existingIndex];
-          const mergedWeeks = [...new Set([...existingItem.weeks, ...newItem.weeks])].sort((a, b) => a - b);
-          const mergedPeriods = [...new Set([...existingItem.periods, ...newItem.periods])].sort((a, b) => a - b);
+          const mergedWeeks = [...new Set([...existingItem.weeks, ...newItem.weeks])].sort((a, b) => Number(a) - Number(b));
+          const mergedPeriods = [...new Set([...existingItem.periods, ...newItem.periods])].sort((a, b) => Number(a) - Number(b));
           updatedBlockedTimes[existingIndex] = {
             ...existingItem,
             weeks: mergedWeeks,
@@ -772,7 +698,7 @@ export default function MajorClassSchedule() {
           const periodsToWeeks = new Map();
           
           value.weekPeriodsMap.forEach((periods: number[], week: number) => {
-            const periodsKey = [...periods].sort((a, b) => a - b).join(',');
+            const periodsKey = [...periods].sort((a, b) => Number(a) - Number(b)).join(',');
             if (!periodsToWeeks.has(periodsKey)) {
               periodsToWeeks.set(periodsKey, {
                 weeks: [],
@@ -786,9 +712,9 @@ export default function MajorClassSchedule() {
           periodsToWeeks.forEach((data, key) => {
             allBlockedTimes.push({
               class_name: value.class_name,
-              weeks: [...new Set(data.weeks)].sort((a, b) => a - b),
+              weeks: [...new Set(data.weeks)].sort((a, b) => Number(a) - Number(b)),
               day: value.day,
-              periods: [...new Set(data.periods)].sort((a, b) => a - b),
+              periods: [...new Set(data.periods)].sort((a, b) => Number(a) - Number(b)),
               reason: value.reason
             });
           });
@@ -876,7 +802,7 @@ export default function MajorClassSchedule() {
           const periodsToWeeks = new Map();
           
           value.weekPeriodsMap.forEach((periods: number[], week: number) => {
-            const periodsKey = [...periods].sort((a, b) => a - b).join(',');
+            const periodsKey = [...periods].sort((a, b) => Number(a) - Number(b)).join(',');
             if (!periodsToWeeks.has(periodsKey)) {
               periodsToWeeks.set(periodsKey, {
                 weeks: [],
@@ -890,9 +816,9 @@ export default function MajorClassSchedule() {
           periodsToWeeks.forEach((data, key) => {
             allBlockedTimes.push({
               class_name: value.class_name,
-              weeks: [...new Set(data.weeks)].sort((a, b) => a - b),
+              weeks: [...new Set(data.weeks)].sort((a, b) => Number(a) - Number(b)),
               day: value.day,
-              periods: [...new Set(data.periods)].sort((a, b) => a - b),
+              periods: [...new Set(data.periods)].sort((a, b) => Number(a) - Number(b)),
               reason: value.reason
             });
           });
@@ -1078,18 +1004,22 @@ export default function MajorClassSchedule() {
             // 如果课程不存在，创建一个新的课程
             course = {
               id: courseCode || uuidv4(),
-              course_code: courseCode,
+              course_id: courseCode,
               course_name: courseName,
               course_type: courseType,
+              teacher_id: '',
               teacher_name: teacherName,
-              credit_hours: 32,
-              total_hours: 32,
+              required_hours: 32,
               teaching_type: '专业大课',
-              major_class: className
+              major_class: className,
+              course_category: 'general',
+              duration: 2,
+              week_frequency: 1,
+              created_at: new Date().toISOString()
             };
-          } else if (courseCode && !course.course_code) {
+          } else if (courseCode && !course.course_id) {
             // 如果课程存在但没有课程编号，更新课程编号
-            course.course_code = courseCode;
+            course.course_id = courseCode;
           }
           
           // 查找班级信息
@@ -1097,9 +1027,15 @@ export default function MajorClassSchedule() {
           if (!classInfo) {
             // 如果班级不存在，创建一个新的班级
             classInfo = {
+              id: uuidv4(),
               class_id: uuidv4(),
               class_name: className,
-              student_count: item['人数'] || 0
+              enrollment_year: new Date().getFullYear(),
+              class_number: 1,
+              student_count: item['人数'] || 0,
+              student_type: 'general',
+              status: 'active',
+              created_at: new Date().toISOString()
             };
           }
           
@@ -1109,7 +1045,11 @@ export default function MajorClassSchedule() {
             // 如果教室不存在，创建一个新的教室
             room = {
               id: uuidv4(),
-              room_name: roomName
+              room_name: roomName,
+              teacher_id: '',
+              room_type: '教室',
+              capacity: 50,
+              created_at: new Date().toISOString()
             };
           }
           
@@ -1265,7 +1205,7 @@ export default function MajorClassSchedule() {
           dayGroups.set(dayKey, new Map());
         }
         const periodMap = dayGroups.get(dayKey);
-        const sortedWeeks = [...new Set(group.weeks)].sort((a, b) => a - b);
+        const sortedWeeks = [...new Set(group.weeks)].sort((a, b) => Number(a) - Number(b));
         const weeksKey = sortedWeeks.join(',');
         
         if (!periodMap.has(weeksKey)) {
@@ -1293,7 +1233,7 @@ export default function MajorClassSchedule() {
       const scheduleTimeLines: string[] = [];
       
       mergedRecords.forEach(record => {
-        const sortedPeriods = [...new Set(record.periods)].sort((a, b) => a - b);
+        const sortedPeriods = [...new Set(record.periods)].sort((a, b) => Number(a) - Number(b));
         const periodStart = sortedPeriods[0];
         const periodEnd = sortedPeriods[sortedPeriods.length - 1];
         const periodStr = periodStart === periodEnd ? `第${periodStart}节` : `第${periodStart}-${periodEnd}节`;
@@ -1331,7 +1271,7 @@ export default function MajorClassSchedule() {
       const scheduledHours = pair.schedules.length;
       
       exportData.push({
-        '课程编号': course?.course_code || course?.id || '无',
+        '课程编号': course?.course_id || course?.id || '无',
         '课程名称': course?.course_name || '未知课程',
         '课程类型': course?.course_type || '理论课',
         '任课教师': course?.teacher_name || '未分配',
@@ -1433,7 +1373,7 @@ export default function MajorClassSchedule() {
     courses
       .filter(course => {
         const isMajorCourse = (course as any).teaching_type === '专业大课';
-        const effectiveTeacherId = isAdmin && !targetTeacher ? null : (targetTeacher?.teacher_id || teacher?.teacher_id);
+        const effectiveTeacherId = isAdmin && !targetTeacher ? null : (targetTeacher?.id || teacher?.id);
         const effectiveTeacherName = isAdmin && !targetTeacher ? null : (targetTeacher?.name || teacher?.name);
         
         // 当没有教师信息时，显示所有专业大课
@@ -1459,7 +1399,7 @@ export default function MajorClassSchedule() {
   // 生成教师筛选后的课程状态
   const filteredCourseScheduleStatuses = courseScheduleStatuses.filter(status => {
     // 使用user对象作为备选（当teacher对象为null时）
-    const effectiveTeacherId = isAdmin && !targetTeacher ? null : (targetTeacher?.teacher_id || teacher?.teacher_id || user?.teacher_id);
+    const effectiveTeacherId = isAdmin && !targetTeacher ? null : (targetTeacher?.id || teacher?.id || user?.teacher_id);
     const effectiveTeacherName = isAdmin && !targetTeacher ? null : (targetTeacher?.name || teacher?.name || user?.full_name);
     
     // 当effectiveTeacherId为null时（管理员未选择教师），显示所有专业大课
@@ -1489,7 +1429,7 @@ export default function MajorClassSchedule() {
   // 根据教师筛选排课结果
   const filteredScheduledClasses = scheduledClasses.filter(schedule => {
     // 使用user对象作为备选（当teacher对象为null时）
-    const effectiveTeacherId = isAdmin && !targetTeacher ? null : (targetTeacher?.teacher_id || teacher?.teacher_id || user?.teacher_id);
+    const effectiveTeacherId = isAdmin && !targetTeacher ? null : (targetTeacher?.id || teacher?.id || user?.teacher_id);
     const effectiveTeacherName = isAdmin && !targetTeacher ? null : (targetTeacher?.name || teacher?.name || user?.full_name);
     
     // 管理员模式，未选择教师，显示所有排课结果
@@ -1540,33 +1480,7 @@ export default function MajorClassSchedule() {
     setTimeGridStatus(grid);
   }, []);
   
-  // 从智能分配同步数据
-  const handleSyncFromSmartAssignment = useCallback(async () => {
-    try {
-      setSaving(true);
-      // 调用同步方法
-      const result = await courseService.syncFromSmartAssignment();
-      
-      // 重新加载课程数据
-      const [coursesData] = await Promise.all([
-        courseService.getAll()
-      ]);
-      setCourses(coursesData || []);
-      
-      // 显示同步成功通知
-      setShowSaveNotification(true);
-      setTimeout(() => setShowSaveNotification(false), 3000);
-      
-      // 显示同步结果
-      alert(`从智能分配同步完成：\n创建了 ${result.created} 个新课程\n更新了 ${result.updated} 个现有课程\n总计处理 ${result.total} 条记录`);
-      
-    } catch (error) {
-      console.error('同步失败:', error);
-      alert('同步失败，请检查控制台错误信息');
-    } finally {
-      setSaving(false);
-    }
-  }, []);
+
 
   // 课程选择处理
   const handleCourseSelect = useCallback((courseStatus: any) => {
@@ -1769,7 +1683,7 @@ export default function MajorClassSchedule() {
         if (selectionMode === 'batch') {
           // 批量选择：根据总学时自动计算需要选择的周次数量（总学时 ÷ 2）
           const course = courses.find(c => c.id === currentCourse?.course_id);
-          const totalHours = course?.total_hours || course?.credit_hours || 32;
+          const totalHours = course?.required_hours || course?.credit || 32;
           const requiredWeeks = Math.ceil(totalHours / 2); // 每2节课算2课时，所以需要选择 totalHours/2 周
           
           // 计算还需要选择多少周（减去已选择的周次）
@@ -1860,7 +1774,7 @@ export default function MajorClassSchedule() {
     
     // 获取当前课程和教室信息
     const currentCourse = courses.find(c => c.id === courseId);
-    const currentRoomId = selectedRoom || currentCourse?.room_id;
+    const currentRoomId = selectedRoom || rooms[0]?.id;
     const currentClass = classes.find(c => c.class_id === classId);
     const currentClassName = currentClass?.class_name || '';
     
@@ -2167,7 +2081,7 @@ export default function MajorClassSchedule() {
     
     // 获取课程总学时
     const course = courses.find(c => c.id === currentCourse.course_id);
-    const totalHours = course?.total_hours || course?.credit_hours || 32;
+    const totalHours = course?.required_hours || course?.credit || 32;
     
     // 检查课时是否一致
     if (scheduledHours !== totalHours) {
@@ -2269,7 +2183,7 @@ export default function MajorClassSchedule() {
         // 对每个分组生成合并后的冲突提醒
         conflictMap.forEach(group => {
           // 对周次排序并生成周次范围
-          const sortedWeeks = [...new Set(group.weeks)].sort((a, b) => a - b);
+          const sortedWeeks = [...new Set(group.weeks)].sort((a, b) => Number(a) - Number(b));
           
           // 生成周次范围字符串
           let weekRange = '';
@@ -2749,7 +2663,7 @@ export default function MajorClassSchedule() {
     if (!course) return;
     
     // 创建课程状态对象
-    const courseStatus = {
+    const courseStatus: CourseScheduleStatus = {
       id: `${group.course_id}-${group.class_id}`,
       course_id: group.course_id,
       class_id: group.class_id,
@@ -2759,14 +2673,13 @@ export default function MajorClassSchedule() {
       room_name: rooms.find(r => r.id === group.room_id)?.room_name || '未选择教室',
       teacher_id: course.teacher_id,
       teacher_name: course.teacher_name || '未分配',
-      total_hours: course.total_hours || course.credit_hours || 32,
+      total_hours: Number(course.required_hours || course.credit || 32),
       scheduled_hours: 0,
       status: 'in_progress',
       schedule_time: '',
       week_number: 0,
       day_of_week: 0,
-      period: 0,
-      teaching_type: (course as any).teaching_type
+      period: 0
     };
     
     // 删除当前课程的现有排课记录
@@ -2989,7 +2902,7 @@ export default function MajorClassSchedule() {
             s.course_id === course.id && s.class_id === classId
           ) || [];
           const hasScheduled = existingSchedules.length > 0;
-          const scheduledHours = hasScheduled ? (course.credit_hours || 32) : 0;
+          const scheduledHours = hasScheduled ? (course.credit || 32) : 0;
           
           const defaultRoom = finalRoomsData[0];
           return {
@@ -3000,12 +2913,11 @@ export default function MajorClassSchedule() {
             class_name: courseClass?.class_name || course.major_class || '未选择班级',
             room_id: defaultRoom?.id || '',
             room_name: defaultRoom?.room_name || '未选择教室',
-            teaching_type: (course as any).teaching_type,
             teacher_id: course.teacher_id,
             teacher_name: course.teacher_name || course.teacher_id,
-            total_hours: course.credit_hours || 32,
+            total_hours: Number(course.credit || 32),
             scheduled_hours: scheduledHours,
-            status: hasScheduled ? 'completed' : 'pending',
+            status: hasScheduled ? 'completed' : 'pending' as CourseStatus,
             schedule_time: hasScheduled ? '已安排' : '未安排',
             week_number: 0,
             day_of_week: 0,
@@ -3405,6 +3317,9 @@ export default function MajorClassSchedule() {
                         return false;
                       }
                       return true;
+                    }).sort((a, b) => {
+                      // 按星期排序
+                      return a.day - b.day;
                     });
                     
                     // 计算分页
@@ -3571,7 +3486,7 @@ export default function MajorClassSchedule() {
                   >
                     <option value="">请选择教室</option>
                     {rooms.map(room => (
-                      <option key={room.id} value={room.id}>{room.name}</option>
+                      <option key={room.id} value={room.id}>{room.room_name}</option>
                     ))}
                   </select>
                 </div>

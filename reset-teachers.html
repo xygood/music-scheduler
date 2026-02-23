@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>重置教师数据</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            padding: 15px;
+            border-radius: 4px;
+            color: #856404;
+            margin: 20px 0;
+        }
+        .info {
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            padding: 15px;
+            border-radius: 4px;
+            color: #0c5460;
+            margin: 20px 0;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            padding: 15px;
+            border-radius: 4px;
+            color: #155724;
+            margin: 20px 0;
+        }
+        button {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background-color: #c82333;
+        }
+        button.secondary {
+            background-color: #6c757d;
+        }
+        button.secondary:hover {
+            background-color: #5a6268;
+        }
+        .data-display {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>教师数据重置工具</h1>
+        
+        <div class="warning">
+            <strong>⚠️ 警告</strong><br>
+            此操作将清除浏览器 LocalStorage 中的教师数据，并从服务器重新加载。<br>
+            请确保您已备份重要数据！
+        </div>
+        
+        <div class="info">
+            <strong>当前状态</strong>
+            <div id="current-status">检查中...</div>
+        </div>
+        
+        <h2>操作选项</h2>
+        
+        <button onclick="checkTeachers()">检查当前教师数据</button>
+        <button onclick="clearTeachers()">清除教师数据</button>
+        <button onclick="reloadTeachers()" class="secondary">从服务器重新加载</button>
+        <button onclick="fixTeacherIds()" class="secondary">修复教师ID为工号</button>
+        
+        <div id="result" class="data-display" style="display: none;"></div>
+    </div>
+    
+    <script>
+        const TEACHERS_KEY = 'music_scheduler_teachers';
+        
+        function checkTeachers() {
+            const resultDiv = document.getElementById('result');
+            const teachersStr = localStorage.getItem(TEACHERS_KEY);
+            
+            if (!teachersStr) {
+                resultDiv.textContent = '未找到教师数据';
+                resultDiv.style.display = 'block';
+                return;
+            }
+            
+            try {
+                const teachers = JSON.parse(teachersStr);
+                let output = `教师数量: ${teachers.length}\n\n`;
+                
+                // 检查ID格式
+                let oldFormatCount = 0;
+                let newFormatCount = 0;
+                
+                teachers.forEach((t, i) => {
+                    const id = t.id || '';
+                    const teacherId = t.teacher_id || '';
+                    
+                    if (id.startsWith('t1769') || id.startsWith('t1') || id.startsWith('t2')) {
+                        oldFormatCount++;
+                        output += `[旧格式] 教师 ${i+1}: id=${id}, teacher_id=${teacherId}, name=${t.name}\n`;
+                    } else if (/^\d+$/.test(id)) {
+                        newFormatCount++;
+                        if (i < 5) { // 只显示前5个
+                            output += `[新格式] 教师 ${i+1}: id=${id}, teacher_id=${teacherId}, name=${t.name}\n`;
+                        }
+                    } else {
+                        output += `[其他] 教师 ${i+1}: id=${id}, teacher_id=${teacherId}, name=${t.name}\n`;
+                    }
+                });
+                
+                output += `\n统计: 旧格式=${oldFormatCount}, 新格式=${newFormatCount}`;
+                
+                resultDiv.textContent = output;
+                resultDiv.style.display = 'block';
+                
+                // 更新状态
+                const statusDiv = document.getElementById('current-status');
+                if (oldFormatCount > 0) {
+                    statusDiv.innerHTML = `<span style="color: red;">发现 ${oldFormatCount} 个旧格式ID的教师数据，需要修复</span>`;
+                } else {
+                    statusDiv.innerHTML = `<span style="color: green;">所有教师ID格式正确</span>`;
+                }
+            } catch (error) {
+                resultDiv.textContent = '解析教师数据失败: ' + error.message;
+                resultDiv.style.display = 'block';
+            }
+        }
+        
+        function clearTeachers() {
+            if (!confirm('确定要清除教师数据吗？')) return;
+            
+            localStorage.removeItem(TEACHERS_KEY);
+            localStorage.removeItem('teachers'); // 也清除旧键
+            
+            document.getElementById('result').textContent = '教师数据已清除';
+            document.getElementById('result').style.display = 'block';
+            document.getElementById('current-status').innerHTML = '<span style="color: orange;">教师数据已清除，请重新加载</span>';
+        }
+        
+        async function reloadTeachers() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.textContent = '正在从服务器加载教师数据...';
+            resultDiv.style.display = 'block';
+            
+            try {
+                const response = await fetch('/api/teachers');
+                if (!response.ok) {
+                    throw new Error('服务器返回错误: ' + response.status);
+                }
+                
+                const teachers = await response.json();
+                
+                // 检查ID格式
+                let fixedCount = 0;
+                teachers.forEach(t => {
+                    if (t.teacher_id && (!t.id || t.id.startsWith('t'))) {
+                        t.id = t.teacher_id; // 使用工号作为ID
+                        fixedCount++;
+                    }
+                });
+                
+                localStorage.setItem(TEACHERS_KEY, JSON.stringify(teachers));
+                
+                resultDiv.textContent = `成功加载 ${teachers.length} 个教师\n修复了 ${fixedCount} 个ID格式\n\n前5个教师:\n` + 
+                    teachers.slice(0, 5).map(t => `id=${t.id}, teacher_id=${t.teacher_id}, name=${t.name}`).join('\n');
+                
+                document.getElementById('current-status').innerHTML = '<span style="color: green;">教师数据已重新加载</span>';
+            } catch (error) {
+                resultDiv.textContent = '加载失败: ' + error.message;
+            }
+        }
+        
+        function fixTeacherIds() {
+            const resultDiv = document.getElementById('result');
+            const teachersStr = localStorage.getItem(TEACHERS_KEY);
+            
+            if (!teachersStr) {
+                resultDiv.textContent = '未找到教师数据';
+                resultDiv.style.display = 'block';
+                return;
+            }
+            
+            try {
+                const teachers = JSON.parse(teachersStr);
+                let fixedCount = 0;
+                
+                teachers.forEach(t => {
+                    // 如果id是旧格式，但teacher_id是工号，则修复
+                    if (t.teacher_id && /^\d+$/.test(t.teacher_id)) {
+                        if (t.id !== t.teacher_id) {
+                            console.log(`修复: ${t.id} -> ${t.teacher_id} (${t.name})`);
+                            t.id = t.teacher_id;
+                            fixedCount++;
+                        }
+                    }
+                });
+                
+                localStorage.setItem(TEACHERS_KEY, JSON.stringify(teachers));
+                
+                resultDiv.textContent = `修复完成!\n共修复 ${fixedCount} 个教师的ID格式\n\n现在所有教师ID都已统一为工号格式。`;
+                resultDiv.style.display = 'block';
+                
+                document.getElementById('current-status').innerHTML = '<span style="color: green;">教师ID已修复</span>';
+            } catch (error) {
+                resultDiv.textContent = '修复失败: ' + error.message;
+                resultDiv.style.display = 'block';
+            }
+        }
+        
+        // 页面加载时自动检查
+        window.onload = function() {
+            checkTeachers();
+        };
+    </script>
+</body>
+</html>

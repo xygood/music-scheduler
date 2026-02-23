@@ -575,7 +575,10 @@ export interface Course {
   duration: number;
   week_frequency: number;
   credit?: number;
+  credit_hours?: number;
   required_hours?: number;
+  total_hours?: number;
+  weeks?: number;
   group_size?: number;
   student_count?: number;
   teaching_type?: '专业大课' | '小组课' | '一对一';

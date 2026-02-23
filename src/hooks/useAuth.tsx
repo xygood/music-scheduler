@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { authService } from '../services';
+import { authService, operationLogService } from '../services';
 import type { Teacher } from '../types';
 
 interface OnlineTeacher {
@@ -218,6 +218,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(response.user);
       // 直接传递 teacher_id，避免状态更新延迟问题
       await refreshTeacher(response.user.teacher_id);
+      // 记录登录日志
+      await operationLogService.logLogin(response.user.teacher_id, response.user.name);
       // 强制结束加载状态
       setLoading(false);
     } catch (err: any) {
@@ -249,6 +251,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     setError(null);
     try {
+      // 记录登出日志
+      if (user?.teacher_id && user?.name) {
+        await operationLogService.logLogout(user.teacher_id, user.name);
+      }
       await authService.signOut();
       setUser(null);
       setTeacher(null);

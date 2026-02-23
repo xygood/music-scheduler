@@ -28,7 +28,7 @@ import MajorClassSchedule from './pages/MajorClassSchedule_Simple';
 import CourseScheduleStats from './pages/CourseScheduleStats';
 
 import LargeClass from './pages/LargeClass';
-import PrioritySuggestion from './pages/PrioritySuggestion';
+import OperationLogs from './pages/OperationLogs';
 
 import { dataManagementService } from './services';
 // import { initializeTestData } from './utils/testDataGenerator';
@@ -103,8 +103,6 @@ function AppRoutes() {
         <Route path="smart-student-assignment" element={<StudentAssignment />} />
         <Route path="teacher-student-stats" element={<TeacherStudentStats />} />
         <Route path="arrange-class" element={<ArrangeClass />} />
-        {/* 排课建议 */}
-        <Route path="priority-suggestion" element={<PrioritySuggestion />} />
         {/* 工作量统计 */}
         <Route path="workload" element={<TeacherWorkload />} />
         {/* 排课统计 */}
@@ -121,6 +119,9 @@ function AppRoutes() {
 
         {/* 通适大课页面 */}
         <Route path="large-class" element={<LargeClass />} />
+        
+        {/* 操作日志页面 */}
+        <Route path="operation-logs" element={<OperationLogs />} />
       </Route>
     </Routes>
   );

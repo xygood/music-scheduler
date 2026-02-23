@@ -6,7 +6,7 @@
 import React, { useState, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import localStorageService, { teacherService, studentService, courseService, roomService, scheduleService, STORAGE_KEYS } from '../services/localStorage';
-import { largeClassScheduleService, syncService, teacherService as apiTeacherService, studentService as apiStudentService } from '../services';
+import { largeClassScheduleService, syncService, teacherService as apiTeacherService, studentService as apiStudentService, operationLogService } from '../services';
 
 const USE_DATABASE = import.meta.env.VITE_USE_DATABASE === 'true';
 
@@ -550,6 +550,15 @@ const Backup: React.FC = () => {
 
       setRestoreResult({ success: true, message: '数据恢复成功！请刷新页面查看数据。' });
       setRestoreProgress('');
+      
+      // 记录操作日志
+      await operationLogService.log(
+        '导入数据备份',
+        'system',
+        `导入数据备份文件：${file.name}`,
+        undefined,
+        undefined
+      );
     } catch (error) {
       console.error('恢复失败:', error);
       const errorMessage = error instanceof Error ? error.message : '未知错误';

@@ -207,8 +207,8 @@ export default function CourseScheduleStats() {
         });
         majorScheduled += courseScheduledHours;
         
-        // 优先使用 total_hours（总学时），如果不存在则使用 credit_hours，最后默认32
-        const courseTotalHours = parseInt((course as any).total_hours) || parseInt((course as any).credit_hours) || 32;
+        // 使用与专业大课页面一致的逻辑：优先使用 total_hours，其次 required_hours，然后 credit/credit_hours，最后默认32
+        const courseTotalHours = parseInt((course as any).total_hours) || parseInt((course as any).required_hours) || parseInt((course as any).credit) || parseInt((course as any).credit_hours) || 32;
         const courseRemaining = Math.max(0, courseTotalHours - courseScheduledHours);
         
         // 获取排课的班级
@@ -342,7 +342,7 @@ export default function CourseScheduleStats() {
       const teacherName = teacher.name || teacher.full_name;
 
       // 先检查该教师的排课记录（不限于小组课）
-      // 注意：排课记录中的 teacher_id 可能是不同的格式（如 't1769531159260'）
+      // 注意：教师ID应统一使用工号格式（如 '120150239'）
       const teacherAllSchedules = scheduledClasses.filter(schedule => {
         const scheduleTeacherId = schedule.teacher_id;
         const scheduleTeacherName = schedule.teacher_name;
@@ -449,7 +449,7 @@ export default function CourseScheduleStats() {
 
         // 课程总学时：小组课按实际排课计算总课时，而不是使用课程定义的学时
         // 因为小组课可能由多个小组组成，总课时是所有小组课时的总和
-        const definedTotalHours = parseInt((course as any).total_hours) || parseInt((course as any).credit_hours) || 32;
+        const definedTotalHours = parseInt((course as any).total_hours) || parseInt((course as any).required_hours) || parseInt((course as any).credit) || parseInt((course as any).credit_hours) || 32;
         // 实际总课时 = 已排课时 + 剩余课时（按课程定义）
         // 但对于小组课，实际总课时应该是所有小组的课时总和
         const courseTotalHours = Math.max(definedTotalHours, courseScheduledHours);
@@ -562,7 +562,7 @@ export default function CourseScheduleStats() {
       individualCourses.forEach(course => {
         const existingDetail = individualCourseDetails.find(d => d.id === course.id);
         if (!existingDetail) {
-          const courseTotalHours = parseInt((course as any).total_hours) || parseInt((course as any).credit_hours) || 32;
+          const courseTotalHours = parseInt((course as any).total_hours) || parseInt((course as any).required_hours) || parseInt((course as any).credit) || parseInt((course as any).credit_hours) || 32;
           individualCourseDetails.push({
             id: course.id,
             name: (course as any).course_name || course.name,

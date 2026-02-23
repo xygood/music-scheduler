@@ -395,7 +395,7 @@ class DataConsistencyService {
     scheduledClasses.forEach(scheduledClass => {
       if (scheduledClass.status === SoftDeleteStatus.ACTIVE) {
         // 检查教师引用
-        const teacher = teachers.find(t => t.id === scheduledClass.teacher_id);
+        const teacher = teachers.find(t => t.teacher_id === scheduledClass.teacher_id || t.id === scheduledClass.teacher_id);
         if (!teacher || teacher.status !== SoftDeleteStatus.ACTIVE) {
           issues.push({
             id: `invalid_teacher_ref_${scheduledClass.id}`,

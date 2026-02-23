@@ -167,7 +167,7 @@ export class AllocationValidationService {
     const suggestions: AllocationSuggestion[] = [];
 
     // 获取教师信息
-    const teacher = teacherId ? allTeachers.find(t => t.id === teacherId) : null;
+    const teacher = teacherId ? allTeachers.find(t => t.teacher_id === teacherId || t.id === teacherId) : null;
     const targetInstrument = subjectType === 'primary' ? student.primary_instrument :
                            subjectType === 'secondary1' ? student.secondary_instrument1 :
                            student.secondary_instrument2;
@@ -530,7 +530,7 @@ export class AllocationValidationService {
       if (count > 1) {
         const [studentId, teacherId, subjectType] = key.split('_');
         const student = allStudents.find(s => s.id === studentId);
-        const teacher = allTeachers.find(t => t.id === teacherId);
+        const teacher = allTeachers.find(t => t.teacher_id === teacherId || t.id === teacherId);
         
         if (student && teacher) {
           conflicts.push({

@@ -107,11 +107,11 @@ const CourseList: React.FC<CourseListProps> = ({
               const course = courses.find(c => c.id === courseStatus.course_id);
               const classInfo = classes.find(c => c.class_id === courseStatus.class_id);
               
-              // 直接使用课程的原始数据
-              const totalHours = course?.total_hours || 32;
-              const weeks = course?.weeks || 16;
+              // 使用正确的字段名从课程数据中获取信息
+              const totalHours = course?.total_hours || course?.required_hours || course?.credit || 32;
+              const weeks = course?.weeks || (totalHours / (course?.week_frequency || 2));
               const weeklyHours = course?.week_frequency || 2;
-              const credit = course?.credit_hours || 2;
+              const credit = course?.credit_hours || course?.credit || 2;
               
               // 计算实际序号（考虑分页）
               const actualIndex = getActualIndex(startIndex, index);

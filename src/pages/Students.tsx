@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useNotification } from '../contexts/NotificationContext';
 import { EnhancedTable, ColumnConfig, ColumnSettings, BatchAction, SortConfig } from '../components/EnhancedTable';
-import { studentService, courseService, classService } from '../services';
+import { studentService, courseService, classService, operationLogService } from '../services';
 import { excelUtils, exportUtils } from '../utils/excel';
 import * as XLSX from 'xlsx';
 import { Upload, Download, Plus, Trash2, Edit2, FileSpreadsheet, X, Users, GraduationCap, Filter, BarChart3, CheckSquare, Square, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -724,6 +724,15 @@ export default function Students() {
       setUploadProgress(`正在导入 ${parsedStudents.length} 条记录...`);
       const result = await studentService.importManyWithUpsert(parsedStudents);
       setUploadProgress(`导入完成！新增 ${result.created} 条，更新 ${result.updated} 条，跳过 ${result.skipped} 条`);
+      
+      // 记录操作日志
+      await operationLogService.log(
+        '导入学生数据',
+        'system',
+        `导入学生数据：新增 ${result.created} 条，更新 ${result.updated} 条，跳过 ${result.skipped} 条`,
+        undefined,
+        undefined
+      );
       
       showSuccess('导入完成', `成功导入 ${result.created} 条记录，更新 ${result.updated} 条记录`);
       

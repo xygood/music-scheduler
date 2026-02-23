@@ -230,7 +230,7 @@ export class ScheduleIntegrationService {
     try {
       // 获取学生的主项教师
       const primaryTeacherId = student.assigned_teachers?.primary_teacher_id || student.teacher_id;
-      const primaryTeacher = teachers.find(t => t.id === primaryTeacherId);
+      const primaryTeacher = teachers.find(t => t.teacher_id === primaryTeacherId || t.id === primaryTeacherId);
 
       if (!primaryTeacher) {
         return null;

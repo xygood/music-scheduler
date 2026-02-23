@@ -6,7 +6,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../services/supabase';
-import { courseService, studentService, scheduleService, teacherService, roomService, classService, largeClassScheduleService, blockedSlotService, weekConfigService } from '../services';
+import { courseService, studentService, scheduleService, teacherService, roomService, classService, largeClassScheduleService, blockedSlotService, weekConfigService, operationLogService } from '../services';
 import websocketService from '../services/websocketService';
 import { calculateSemesterNumber, getCoursesForClass } from '../utils/courseAssignment';
 import { v4 as uuidv4 } from 'uuid';
@@ -116,12 +116,14 @@ export default function ArrangeClass() {
   // 辅助函数：获取有效的教师ID（优先使用teacher，其次使用user）
   // 注意：这里返回的是教师工号（teacher_id），用于匹配 scheduled_classes.teacher_id
   const getEffectiveTeacherId = useCallback(() => {
-    return targetTeacher?.teacher_id || teacher?.teacher_id || user?.teacher_id;
+    // 统一返回教师工号（现在教师的id字段就是工号）
+    return targetTeacher?.id || teacher?.id || user?.teacher_id;
   }, [targetTeacher, teacher, user]);
 
   // 辅助函数：获取有效的教师工号（优先使用teacher，其次使用user）
   const getEffectiveTeacherNumber = useCallback(() => {
-    return targetTeacher?.teacher_id || teacher?.teacher_id || user?.teacher_id;
+    // 统一返回教师工号
+    return targetTeacher?.id || teacher?.id || user?.teacher_id;
   }, [targetTeacher, teacher, user]);
 
   // 辅助函数：获取有效的教师名称（优先使用teacher，其次使用user）
@@ -135,8 +137,8 @@ export default function ArrangeClass() {
     if (teacher) return teacher;
     if (user) {
       // 使用user对象构建一个临时的教师对象
-      return {
-        id: user.id,
+      const tempTeacher: Teacher = {
+        id: user.teacher_id,
         teacher_id: user.teacher_id,
         name: user.full_name,
         email: user.email,
@@ -146,7 +148,8 @@ export default function ArrangeClass() {
         max_students: user.max_students,
         created_at: user.created_at,
         updated_at: user.updated_at
-      } as Teacher;
+      };
+      return tempTeacher;
     }
     return null;
   }, [targetTeacher, teacher, user]);
@@ -773,10 +776,20 @@ export default function ArrangeClass() {
             // 检查每周循环禁排
             if (slot.type === 'recurring' && slot.day_of_week === day + 1) {
               // 检查班级关联：如果禁排有关联班级，则需要考虑当前班级
-              // 这里简化处理，因为initializeTimeGrid是全局的，不针对特定班级
-              // 所以只考虑全局禁排（没有班级关联的禁排）
               if (slot.class_associations && slot.class_associations.length > 0) {
-                return false; // 跳过有班级关联的禁排
+                // 如果有选中的学生，检查是否有班级匹配
+                if (groupStudents.length > 0) {
+                  const allClasses = Array.from(new Set(groupStudents.map(s => s.major_class || s.class_name || '').filter(c => c)));
+                  const hasClassMatch = slot.class_associations.some(assoc => {
+                    const assocName = typeof assoc === 'string' ? assoc : assoc?.name;
+                    return assocName && allClasses.some(c => c.includes(assocName) || assocName.includes(c));
+                  });
+                  if (!hasClassMatch) {
+                    return false; // 跳过与当前选中学生班级不匹配的禁排
+                  }
+                } else {
+                  return false; // 没有选中学生时，跳过有班级关联的禁排
+                }
               }
               
               if (slot.start_period && slot.end_period) {
@@ -787,9 +800,20 @@ export default function ArrangeClass() {
             
             // 检查特定周次的特定星期禁排
             if (slot.type === 'specific' && slot.specific_week_days) {
-              // 同样，只考虑全局禁排
+              // 检查班级关联
               if (slot.class_associations && slot.class_associations.length > 0) {
-                return false;
+                if (groupStudents.length > 0) {
+                  const allClasses = Array.from(new Set(groupStudents.map(s => s.major_class || s.class_name || '').filter(c => c)));
+                  const hasClassMatch = slot.class_associations.some(assoc => {
+                    const assocName = typeof assoc === 'string' ? assoc : assoc?.name;
+                    return assocName && allClasses.some(c => c.includes(assocName) || assocName.includes(c));
+                  });
+                  if (!hasClassMatch) {
+                    return false;
+                  }
+                } else {
+                  return false;
+                }
               }
               return slot.specific_week_days.some(wd => wd.day === day + 1);
             }
@@ -800,6 +824,65 @@ export default function ArrangeClass() {
           // 检查硬编码的禁排时段（例如：所有周一下午5-8节禁排）
           if (!isBlocked) {
             isBlocked = isPeriodBlocked(day + 1, period + 1);
+          }
+          
+          // 检查教师已经排定的时间（包括专业大课和小组课）
+          if (!isBlocked) {
+            const effectiveTeacherId = targetTeacher?.id || teacher?.id;
+            if (effectiveTeacherId) {
+              const teacherSchedule = scheduledClasses.find(sc => {
+                // 检查教师匹配（现在教师的id字段就是工号）
+                const isTeacherMatch = sc.teacher_id === effectiveTeacherId;
+                
+                if (!isTeacherMatch) return false;
+                if (sc.day_of_week !== day + 1 || sc.period !== period + 1) return false;
+                return true;
+              });
+              
+              if (teacherSchedule) {
+                isBlocked = true;
+              }
+            }
+          }
+          
+          // 检查学生排课冲突（当有选中学生时）
+          if (!isBlocked && groupStudents.length > 0) {
+            const studentIds = groupStudents.map(s => s.id);
+            const studentConflict = scheduledClasses.find(sc => {
+              if (!studentIds.includes(sc.student_id)) return false;
+              if (sc.day_of_week !== day + 1 || sc.period !== period + 1) return false;
+              return true;
+            });
+            
+            if (studentConflict) {
+              isBlocked = true;
+            }
+          }
+          
+          // 检查班级的专业大课禁排时间数据（当有选中学生时）
+          if (!isBlocked && groupStudents.length > 0) {
+            const allClasses = Array.from(new Set(groupStudents.map(s => s.major_class || s.class_name || '').filter(c => c)));
+            const importedBlockedTimes = JSON.parse(localStorage.getItem('music_scheduler_imported_blocked_times') || '[]');
+            
+            if (allClasses.length > 0 && importedBlockedTimes.length > 0) {
+              const allClassesBlockedTimes = importedBlockedTimes.filter((b: any) => {
+                const blockedClassName = b.class_name;
+                return blockedClassName && allClasses.some((className: string) =>
+                  blockedClassName.includes(className)
+                );
+              });
+              
+              // 检查是否有任何周次的禁排
+              const isBlockedByImported = allClassesBlockedTimes.some((blockedTime: any) => {
+                if (blockedTime.day !== day + 1) return false;
+                if (!blockedTime.periods || !blockedTime.periods.includes(period + 1)) return false;
+                return true; // 只要有任何周次的禁排，就标记为禁排
+              });
+              
+              if (isBlockedByImported) {
+                isBlocked = true;
+              }
+            }
           }
           
           dayRow.push({ status: isBlocked ? 'blocked' : 'available' });
@@ -822,7 +905,7 @@ export default function ArrangeClass() {
       }
       setTimeGridStatus(grid);
     }
-  }, [getBlockedSlots]);
+  }, [getBlockedSlots, groupStudents, scheduledClasses, targetTeacher, teacher]);
 
   // 检查时段是否可用（同步版本，用于批量选择）
   const isSlotAvailableSync = (day: number, period: number, week: number) => {
@@ -860,10 +943,13 @@ export default function ArrangeClass() {
     }
 
     // 检查教师已经排定的时间
-    const effectiveTeacherId = targetTeacher?.teacher_id || teacher?.teacher_id;
+    const effectiveTeacherId = targetTeacher?.id || teacher?.id;
     if (effectiveTeacherId) {
       const teacherSchedule = scheduledClasses.find(sc => {
-        if (sc.teacher_id !== effectiveTeacherId) return false;
+        // 检查教师匹配（现在教师的id字段就是工号）
+        const isTeacherMatch = sc.teacher_id === effectiveTeacherId;
+        
+        if (!isTeacherMatch) return false;
         if (sc.day_of_week !== day || sc.period !== period) return false;
         if (sc.start_week !== undefined && sc.end_week !== undefined) {
           return week >= sc.start_week && week <= sc.end_week;
@@ -876,7 +962,7 @@ export default function ArrangeClass() {
       }
 
       // 检查教师是否有专业大课或理论课
-      const effectiveTeacherName = targetTeacher?.name || teacher?.name;
+      const teacherName = targetTeacher?.name || teacher?.name;
       const teacherMajorClass = scheduledClasses.find(sc => {
         const isMajorClass = (sc as any).teaching_type === '专业大课' || 
                             (sc as any).course_type === '专业大课' ||
@@ -889,11 +975,11 @@ export default function ArrangeClass() {
         if (sc.teacher_id === effectiveTeacherId) {
           teacherMatches = true;
         } else if (sc.teacher_name) {
-          if (sc.teacher_name === effectiveTeacherName) {
+          if (sc.teacher_name === teacherName) {
             teacherMatches = true;
           } else {
             const scheduleTeachers = sc.teacher_name.split(/[,，、]/).map((t: string) => t.trim());
-            teacherMatches = scheduleTeachers.includes(effectiveTeacherName || '');
+            teacherMatches = scheduleTeachers.includes(teacherName || '');
           }
         }
         if (!teacherMatches) return false;
@@ -1242,7 +1328,7 @@ export default function ArrangeClass() {
     );
 
     // 防止与其他教师的课程冲突
-    const effectiveTeacherId = targetTeacher?.teacher_id || teacher?.teacher_id || user?.teacher_id;
+    const effectiveTeacherId = targetTeacher?.id || teacher?.id || user?.teacher_id;
     if (effectiveTeacherId) {
       const hasTeacherConflict = scheduledClasses.some(
         sc => sc.teacher_id === effectiveTeacherId &&
@@ -1768,10 +1854,10 @@ export default function ArrangeClass() {
           const isPrimaryTeacherMatch = (
             s.teacher_id === effectiveTeacherId ||
             (targetTeacher && s.teacher_name === targetTeacher.name) ||
-            (targetTeacher && s.teacher_id === targetTeacher.teacher_id) ||
+            (targetTeacher && s.teacher_id === targetTeacher.id) ||
             (s.assigned_teachers && (
               s.assigned_teachers.primary_teacher_id === effectiveTeacherId ||
-              (targetTeacher && s.assigned_teachers.primary_teacher_id === targetTeacher.teacher_id)
+              (targetTeacher && s.assigned_teachers.primary_teacher_id === targetTeacher.id)
             ))
           );
           
@@ -1781,9 +1867,9 @@ export default function ArrangeClass() {
             s.assigned_teachers.secondary2_teacher_id === effectiveTeacherId ||
             s.assigned_teachers.secondary3_teacher_id === effectiveTeacherId ||
             (targetTeacher && (
-              s.assigned_teachers.secondary1_teacher_id === targetTeacher.teacher_id ||
-              s.assigned_teachers.secondary2_teacher_id === targetTeacher.teacher_id ||
-              s.assigned_teachers.secondary3_teacher_id === targetTeacher.teacher_id
+              s.assigned_teachers.secondary1_teacher_id === targetTeacher.id ||
+              s.assigned_teachers.secondary2_teacher_id === targetTeacher.id ||
+              s.assigned_teachers.secondary3_teacher_id === targetTeacher.id
             ))
           );
           
@@ -1807,19 +1893,19 @@ export default function ArrangeClass() {
               switch (index) {
                 case 0:
                   if (s.assigned_teachers?.secondary1_teacher_id === effectiveTeacherId ||
-                      (targetTeacher && s.assigned_teachers?.secondary1_teacher_id === targetTeacher.teacher_id)) {
+                      (targetTeacher && s.assigned_teachers?.secondary1_teacher_id === targetTeacher.id)) {
                     isThisSecondaryTeacherMatch = true;
                   }
                   break;
                 case 1:
                   if (s.assigned_teachers?.secondary2_teacher_id === effectiveTeacherId ||
-                      (targetTeacher && s.assigned_teachers?.secondary2_teacher_id === targetTeacher.teacher_id)) {
+                      (targetTeacher && s.assigned_teachers?.secondary2_teacher_id === targetTeacher.id)) {
                     isThisSecondaryTeacherMatch = true;
                   }
                   break;
                 case 2:
                   if (s.assigned_teachers?.secondary3_teacher_id === effectiveTeacherId ||
-                      (targetTeacher && s.assigned_teachers?.secondary3_teacher_id === targetTeacher.teacher_id)) {
+                      (targetTeacher && s.assigned_teachers?.secondary3_teacher_id === targetTeacher.id)) {
                     isThisSecondaryTeacherMatch = true;
                   }
                   break;
@@ -2051,8 +2137,8 @@ export default function ArrangeClass() {
     const studentsToAdd = [];
     
     // 获取当前教师信息
-    const effectiveTeacherId = targetTeacher?.teacher_id || teacher?.teacher_id;
-    const effectiveTeacherNumber = targetTeacher?.teacher_id || teacher?.teacher_id;
+    const effectiveTeacherId = targetTeacher?.id || teacher?.id;
+    const effectiveTeacherNumber = targetTeacher?.id || teacher?.id;
     const effectiveTeacherName = targetTeacher?.name || teacher?.name;
     
     // 从 result.students 获取学生列表
@@ -2101,19 +2187,14 @@ export default function ArrangeClass() {
       // 2. 如果该教师是学生的副项教师 → secondary
       // 3. 如果都不是（可能是管理员安排的）→ 检查学生的 teacher_id 是否匹配
       
-      // 检查是否为主项教师（使用教师ID或教师编号）
+      // 检查是否为主项教师（使用教师ID，现在是工号）
       const isPrimaryTeacher = student.assigned_teachers?.primary_teacher_id === originalTeacherId ||
-                              student.assigned_teachers?.primary_teacher_id === originalTeacherNumber ||
-                              student.teacher_id === originalTeacherId ||
-                              student.teacher_id === originalTeacherNumber;
+                              student.teacher_id === originalTeacherId;
       
       // 检查是否为副项教师
       const isSecondaryTeacher = student.assigned_teachers?.secondary1_teacher_id === originalTeacherId ||
-                                student.assigned_teachers?.secondary1_teacher_id === originalTeacherNumber ||
                                 student.assigned_teachers?.secondary2_teacher_id === originalTeacherId ||
-                                student.assigned_teachers?.secondary2_teacher_id === originalTeacherNumber ||
-                                student.assigned_teachers?.secondary3_teacher_id === originalTeacherId ||
-                                student.assigned_teachers?.secondary3_teacher_id === originalTeacherNumber;
+                                student.assigned_teachers?.secondary3_teacher_id === originalTeacherId;
       
       if (isSecondaryTeacher && !isPrimaryTeacher) {
         // 是副项教师但不是主项教师 → 副项学生
@@ -2143,7 +2224,15 @@ export default function ArrangeClass() {
       filterGroupCoursesByStudentClasses(studentsToAdd, teacherToSelect);
     }
     
-    // 10. 加载已选时间槽（从原排课记录中恢复）
+    // 10. 重要：学生选择变化后，自动更新时间网格，显示基于所选学生的禁排时段和可用时段
+    if (studentsToAdd.length > 0) {
+      // 延迟一点执行，确保状态更新完成
+      setTimeout(() => {
+        initializeTimeGrid();
+      }, 100);
+    }
+    
+    // 11. 加载已选时间槽（从原排课记录中恢复）
     // 注意：需要恢复该小组的所有节次，而不仅是当前行的节次
     if (result.originalSchedules && result.originalSchedules.length > 0) {
       // 获取当前小组的学生姓名列表
@@ -2361,6 +2450,15 @@ export default function ArrangeClass() {
       
       showToast('success', `成功删除 ${schedulesToDelete.length} 条排课记录`);
       
+      // 记录操作日志
+      await operationLogService.log(
+        '删除排课',
+        'schedule',
+        `删除 ${result.studentName} 的 ${result.courseName}，时间：周${result.dayOfWeek} 第${result.period}节`,
+        undefined,
+        result.studentName
+      );
+      
     } catch (error) {
       console.error('删除排课失败:', error);
       showToast('error', '删除排课失败，请检查控制台错误信息');
@@ -2466,6 +2564,15 @@ export default function ArrangeClass() {
       updateProgress(completedTasks, totalTasks);
       
       showToast('success', `成功删除 ${deletedCount} 条排课记录`);
+      
+      // 记录操作日志
+      await operationLogService.log(
+        '批量删除排课',
+        'schedule',
+        `批量删除 ${deletedCount} 条排课记录`,
+        undefined,
+        undefined
+      );
     } catch (error) {
       console.error('批量删除排课失败:', error);
       showToast('error', '批量删除排课失败，请检查控制台错误信息');
@@ -2693,7 +2800,7 @@ export default function ArrangeClass() {
               const isGroupCourse = (course as any).teaching_type === '小组课';
               
               // 根据教师的教研室过滤课程
-              const effectiveTeacherId = targetTeacher?.teacher_id || teacher?.teacher_id;
+              const effectiveTeacherId = targetTeacher?.id || teacher?.id;
               if (effectiveTeacherId) {
                 // 获取教师的教研室代码（使用faculty_id字段，这是教师数据中存储教研室信息的正确字段）
                 const teacherFacultyId = targetTeacher?.faculty_id || teacher?.faculty_id;
@@ -2704,7 +2811,7 @@ export default function ArrangeClass() {
                   const courseType = (course as any).course_type || course.course_type;
                   
                   // 检查是否是林琳教师（特殊情况：她既带钢琴又带器乐课程）
-                  const teacherNumber = targetTeacher?.teacher_id || teacher?.teacher_id;
+                  const teacherNumber = targetTeacher?.id || teacher?.id;
                   const isLinLinTeacher = teacherNumber === '120170194';
                   
                   // 如果课程有明确的faculty_id字段，直接匹配
@@ -2918,7 +3025,10 @@ export default function ArrangeClass() {
           
           // 如果选择了目标教师，只显示该教师的排课（管理员选择教师后也只显示该教师的排课）
           if (effectiveTeacherId) {
-            filteredScheduleData = filteredScheduleData.filter(sc => sc.teacher_id === effectiveTeacherId);
+            // 检查教师匹配（现在教师的id字段就是工号）
+            filteredScheduleData = filteredScheduleData.filter(sc => {
+              return sc.teacher_id === effectiveTeacherId;
+            });
           }
           
           // 过滤掉专业大课（理论课），只显示专业小课
@@ -2989,7 +3099,7 @@ export default function ArrangeClass() {
               // 尝试从所有教师数据中查找
               const allTeachers = await teacherService.getAll();
               if (isCancelled) return;
-              const foundTeacher = allTeachers.find(t => t.id === effectiveTeacherId);
+              const foundTeacher = allTeachers.find(t => t.teacher_id === effectiveTeacherId || t.id === effectiveTeacherId);
               
               if (foundTeacher) {
                 const roomList: Array<{ room: Room | null; facultyCode: string }> = [];
@@ -3629,7 +3739,7 @@ export default function ArrangeClass() {
     try {
       const conflicts = new Set<number>();
       const allSchedules = await scheduleService.getAll();
-      const effectiveTeacherId = targetTeacher?.teacher_id || teacher?.teacher_id;
+      const effectiveTeacherId = targetTeacher?.id || teacher?.id;
       const blockedSlots = await blockedSlotService.getBySemester(selectedSemesterLabel);
       
       // 检测每个周次是否有冲突
@@ -4548,6 +4658,15 @@ export default function ArrangeClass() {
           semester: currentSemesterNumber,
           status: 'scheduled'
         });
+        
+        // 记录操作日志
+        await operationLogService.log(
+          '创建排课',
+          'schedule',
+          `为 ${student.name} 安排 ${course.course_name}，时间：周${dayOfWeek} 第${period}节，周次：${selectedWeekRange.startWeek}-${selectedWeekRange.endWeek}周`,
+          student.id,
+          student.name
+        );
       }
 
       // 刷新排课数据
@@ -5320,7 +5439,6 @@ export default function ArrangeClass() {
   const getPrimaryStudents = React.useCallback((): any[] => {
     const effectiveTeacherId = targetTeacher?.id || teacher?.id;
     const effectiveTeacherName = targetTeacher?.name || teacher?.name;
-    const effectiveTeacherNumber = targetTeacher?.teacher_id || teacher?.teacher_id;
     if (!effectiveTeacherId) return [];
     
     return myStudents.filter(student => {
@@ -5332,9 +5450,7 @@ export default function ArrangeClass() {
       
       // 主项教师匹配：学生的主项教师是当前教师
       const teacherMatch = student.assigned_teachers?.primary_teacher_id === effectiveTeacherId ||
-                          student.assigned_teachers?.primary_teacher_id === effectiveTeacherNumber ||
                           student.teacher_id === effectiveTeacherId ||
-                          student.teacher_id === effectiveTeacherNumber ||
                           student.teacher_name === effectiveTeacherName;
       
       // 年级筛选
@@ -5356,7 +5472,6 @@ export default function ArrangeClass() {
   // 获取副项学生（使用 useMemo 缓存）
   const getSecondaryStudents = React.useCallback((): any[] => {
     const effectiveTeacherId = targetTeacher?.id || teacher?.id;
-    const effectiveTeacherNumber = targetTeacher?.teacher_id || teacher?.teacher_id;
     if (!effectiveTeacherId) return [];
     
     return myStudents.filter(student => {
@@ -5365,11 +5480,8 @@ export default function ArrangeClass() {
       
       // 副项教师匹配：学生的副项教师是当前教师
       const teacherMatch = student.assigned_teachers?.secondary1_teacher_id === effectiveTeacherId ||
-                          student.assigned_teachers?.secondary1_teacher_id === effectiveTeacherNumber ||
                           student.assigned_teachers?.secondary2_teacher_id === effectiveTeacherId ||
-                          student.assigned_teachers?.secondary2_teacher_id === effectiveTeacherNumber ||
-                          student.assigned_teachers?.secondary3_teacher_id === effectiveTeacherId ||
-                          student.assigned_teachers?.secondary3_teacher_id === effectiveTeacherNumber;
+                          student.assigned_teachers?.secondary3_teacher_id === effectiveTeacherId;
       
       // 年级筛选
       let gradeMatch = true;
@@ -5642,6 +5754,11 @@ export default function ArrangeClass() {
     newStudentSources.set(student.id, source);
     setStudentSources(newStudentSources);
     
+    // 重要：学生选择变化后，自动更新时间网格，显示基于所选学生的禁排时段和可用时段
+    setTimeout(() => {
+      initializeTimeGrid();
+    }, 100);
+    
     // 如果选择了课程，更新学生进度
     if (selectedCourseName) {
       // 不需要手动更新进度，useMemo 会自动计算
@@ -5906,6 +6023,11 @@ export default function ArrangeClass() {
     const newStudentSources = new Map(studentSources);
     newStudentSources.delete(studentId);
     setStudentSources(newStudentSources);
+    
+    // 重要：学生选择变化后，自动更新时间网格，显示基于所选学生的禁排时段和可用时段
+    setTimeout(() => {
+      initializeTimeGrid();
+    }, 100);
     
     // 如果选择了课程，更新学生进度
     if (selectedCourseName) {
@@ -7407,7 +7529,10 @@ export default function ArrangeClass() {
           return true;
         });
         if (studentConflict) {
-          return { blocked: true, reason: `学生已排课：${studentConflict.course_name || '课程'}` };
+          // 获取冲突学生的姓名
+          const conflictStudent = groupStudents.find((s: any) => s.id === studentConflict.student_id);
+          const studentName = conflictStudent?.name || conflictStudent?.student_name || '未知学生';
+          return { blocked: true, reason: `学生已排课：${studentName} - ${studentConflict.course_name || '课程'}` };
         }
       }
 
@@ -7423,12 +7548,15 @@ export default function ArrangeClass() {
         <div className="grid grid-cols-8 gap-4">
           {/* 节次时间列 */}
           <div className="space-y-2">
-            <div className="text-center font-semibold text-gray-800 py-2 bg-gray-50 rounded-lg">节次</div>
+            <div className="text-center font-semibold text-gray-800 py-2 px-2 bg-gray-50 rounded-lg flex flex-col items-center justify-center min-h-[48px] border border-gray-200">
+              <span>节次</span>
+              <span className="text-xs text-gray-500 font-normal">时间段</span>
+            </div>
             <div className="space-y-2">
               {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(period => {
                 const periodInfo = PERIOD_CONFIG.find(p => p.period === period);
                 return (
-                  <div key={period} className="border border-gray-200 rounded-lg p-1 h-12 flex flex-col justify-center items-center bg-gray-50">
+                  <div key={period} className="border border-gray-200 rounded-lg p-2 h-12 flex flex-col justify-center items-center bg-gray-50 transition-all duration-200">
                     <div className="text-xs font-medium text-gray-800">第{period}节</div>
                     <div className="text-xs text-gray-600">{periodInfo?.startTime}-{periodInfo?.endTime}</div>
                   </div>
@@ -7440,7 +7568,7 @@ export default function ArrangeClass() {
           {/* 星期列 */}
           {WEEKDAYS.map((day) => (
             <div key={day.value} className="space-y-2">
-              <div className="text-center font-semibold text-gray-800 py-2 bg-gray-50 rounded-lg flex flex-col items-center">
+              <div className="text-center font-semibold text-gray-800 py-2 px-2 bg-gray-50 rounded-lg flex flex-col items-center justify-center min-h-[48px] border border-gray-200">
                 <span>{day.label}</span>
                 <span className="text-xs text-gray-500 font-normal">{getDayDate(selectedWeek, day.value)}</span>
               </div>
@@ -7513,22 +7641,22 @@ export default function ArrangeClass() {
                     displayStatus = '已选';
                   } else if (remainingWeeks === 0) {
                     // 所有周次都没有空闲节次
-                    className = 'bg-gray-100 text-gray-500 cursor-not-allowed border border-gray-200';
+                    className = 'bg-gray-100 text-gray-500 cursor-not-allowed';
                     displayStatus = '已满';
                   } else if (isTeacherMajorClassBlock) {
                     // 教师专业大课 - 紫色样式，显示剩余可排周数
-                    className = 'bg-purple-100 text-purple-700 cursor-not-allowed border border-purple-200';
+                    className = 'bg-purple-100 text-purple-700 cursor-not-allowed';
                     displayStatus = `剩${remainingWeeks}周`;
                   } else if (isLargeClassBlock) {
                     // 通适大课禁排 - 蓝色样式，但显示剩余可排周数
-                    className = 'bg-blue-100 text-blue-700 cursor-not-allowed border border-blue-200';
+                    className = 'bg-blue-100 text-blue-700 cursor-not-allowed';
                     displayStatus = `剩${remainingWeeks}周`;
                   } else if (isBlocked) {
                     // 其他禁排 - 红色样式，但显示剩余可排周数
-                    className = 'bg-red-100 text-red-700 cursor-not-allowed border border-red-200';
+                    className = 'bg-red-100 text-red-700 cursor-not-allowed';
                     displayStatus = `剩${remainingWeeks}周`;
                   } else {
-                    className = 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100';
+                    className = 'bg-green-50 text-green-700 hover:bg-green-100';
                     displayStatus = `剩${remainingWeeks}周`;
                   }
 
@@ -7549,7 +7677,7 @@ export default function ArrangeClass() {
                   return (
                     <div
                       key={`${day.value}-${period}`}
-                      className={`rounded-lg p-1 cursor-pointer transition-all duration-200 ${className} hover:scale-[1.02] h-12 flex flex-col justify-center items-center`}
+                      className={`border border-gray-200 rounded-lg p-2 cursor-pointer transition-all duration-200 ${className} hover:scale-[1.02] h-12 flex flex-col justify-center items-center`}
                       onClick={() => isClickable && handleTimeSlotClick(day.value, period)}
                       onMouseDown={() => isClickable && handleMouseDown(day.value, period)}
                       onMouseEnter={() => isClickable && handleMouseEnter(day.value, period)}
@@ -7585,6 +7713,13 @@ export default function ArrangeClass() {
     const classBlockedTimes = importedBlockedTimes.filter((item: any) =>
       item.class_name && allClasses.some((className: string) => item.class_name.includes(className))
     );
+
+    // 按星期顺序排序（周一到周日）
+    classBlockedTimes.sort((a: any, b: any) => {
+      const dayA = a.day || 0;
+      const dayB = b.day || 0;
+      return dayA - dayB;
+    });
 
     return (
       <div className="mt-6 bg-white p-4 rounded-lg shadow-sm">
@@ -8007,7 +8142,7 @@ export default function ArrangeClass() {
                 const courseType = (course as any).course_type || course.course_type;
                 
                 // 检查是否是林琳教师（特殊情况：她既带钢琴又带器乐课程）
-                const teacherNumber = targetTeacher?.teacher_id || teacher?.teacher_id;
+                const teacherNumber = targetTeacher?.id || teacher?.id;
                 const isLinLinTeacher = teacherNumber === '120170194';
                 
                 // 如果课程有明确的faculty_id字段，直接匹配
@@ -8734,7 +8869,7 @@ export default function ArrangeClass() {
                   value={targetTeacher?.id || ''}
                   onChange={(e) => {
                     const teacherId = e.target.value;
-                    const selectedTeacher = availableTeachers.find(t => t.id === teacherId);
+                    const selectedTeacher = availableTeachers.find(t => t.teacher_id === teacherId || t.id === teacherId);
                     setTargetTeacher(selectedTeacher || null);
                     // 重置状态
                     setSelectedCourseName('');
@@ -9171,7 +9306,7 @@ export default function ArrangeClass() {
             {groupStudents.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>点击上方学生添加到小组</p>
+                <p>点击主项或副项框中的学生添加到小组</p>
                 <p className="text-xs mt-1">
                   支持主副项混合小组
                 </p>
@@ -9423,7 +9558,7 @@ export default function ArrangeClass() {
                     const teacherId = (course as any).teacher_id || course.teacher_id || '';
                     const teacherName = (course as any).teacher_name || '';
                     // 尝试从 availableTeachers 中查找教师名称
-                    const foundTeacher = availableTeachers.find(t => t.id === teacherId);
+                    const foundTeacher = availableTeachers.find(t => t.teacher_id === teacherId || t.id === teacherId);
                     const teacherFullName = foundTeacher?.name || teacherName || '';
                     // 获取年级信息
                     const grade = foundClass?.enrollment_year || (course as any).grade || '';

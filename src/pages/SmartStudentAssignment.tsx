@@ -118,6 +118,9 @@ const SmartStudentAssignment: React.FC = () => {
           student_count: studentsData.filter(s => s.teacher_id === t.id).length
         }));
 
+        console.log('[教师分配] 加载教师数据:', formattedTeachers.length, '位');
+        console.log('[教师分配] 教师列表示例:', formattedTeachers.slice(0, 3));
+
         // 转换为学生显示格式 - 扩展支持多专业分配
         const formattedStudents: Student[] = studentsData.map(s => {
           // 提取专业信息 - 优先使用新字段，兼容旧字段
@@ -793,7 +796,7 @@ const SmartStudentAssignment: React.FC = () => {
             }
           };
           
-          const teacher = teachers.find(t => t.id === teacherId);
+          const teacher = teachers.find(t => t.teacher_id === teacherId || t.id === teacherId);
           if (position === 'primary') {
             updated.assigned_teachers.primary_teacher_id = teacherId || undefined;
             updated.assigned_teachers.primary_teacher_name = teacher?.name || undefined;

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { weekConfigService, blockedSlotService, classService } from '../services';
+import { weekConfigService, blockedSlotService, classService, operationLogService } from '../services';
 import { useAuth } from '../hooks/useAuth';
 import { Calendar, Plus, Trash2, Clock, AlertCircle, Check, X, Lock, Users, Edit } from 'lucide-react';
 import { SemesterWeekConfig, BlockedSlot, BlockedSlotType, PERIOD_CONFIG } from '../types';
@@ -313,6 +313,15 @@ export default function WeekConfig() {
 
         setBlockedSlots(prev => prev.map(slot => slot.id === editingSlotId ? updatedSlot : slot));
         setMessage({ type: 'success', text: '禁排时段更新成功' });
+        
+        // 记录操作日志
+        await operationLogService.log(
+          '更新禁排时间',
+          'system',
+          `更新禁排时间：${newBlockedSlot.reason || '禁排'}，时间：周${newBlockedSlot.day_of_week} 第${newBlockedSlot.start_period}-${newBlockedSlot.end_period}节`,
+          undefined,
+          undefined
+        );
       } else {
         // 新增模式：创建新的禁排时段
         const slot = await blockedSlotService.create({
@@ -333,6 +342,15 @@ export default function WeekConfig() {
 
         setBlockedSlots(prev => [...prev, slot]);
         setMessage({ type: 'success', text: '禁排时段添加成功' });
+        
+        // 记录操作日志
+        await operationLogService.log(
+          '添加禁排时间',
+          'system',
+          `添加禁排时间：${newBlockedSlot.reason || '禁排'}，时间：周${newBlockedSlot.day_of_week} 第${newBlockedSlot.start_period}-${newBlockedSlot.end_period}节`,
+          undefined,
+          undefined
+        );
       }
 
       setShowAddBlockedSlot(false);
@@ -363,6 +381,15 @@ export default function WeekConfig() {
 
       setBlockedSlots(prev => prev.filter(s => s.id !== id));
       setMessage({ type: 'success', text: '禁排时段删除成功' });
+      
+      // 记录操作日志
+      await operationLogService.log(
+        '删除禁排时间',
+        'system',
+        '删除禁排时间',
+        undefined,
+        undefined
+      );
     } catch (error) {
       console.error('删除禁排时段失败:', error);
       setMessage({ type: 'error', text: '删除禁排时段失败：' + (error instanceof Error ? error.message : '未知错误') });

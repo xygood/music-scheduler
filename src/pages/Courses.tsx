@@ -77,6 +77,11 @@ export default function Courses() {
     duration: 0,
     teacher_name: ''
   });
+
+  // 分页状态
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
@@ -785,7 +790,7 @@ export default function Courses() {
       // 管理员：根据选择的教师过滤
       if (selectedTeacher && course.teacher_id !== selectedTeacher) {
         // 如果没有teacher_id字段，尝试通过教师姓名匹配
-        const selectedTeacherObj = availableTeachers.find(t => t.id === selectedTeacher);
+        const selectedTeacherObj = availableTeachers.find(t => t.teacher_id === selectedTeacher || t.id === selectedTeacher);
         if (selectedTeacherObj && course.teacher_name !== selectedTeacherObj.name) {
           return false;
         }
@@ -794,6 +799,18 @@ export default function Courses() {
 
     return true;
   });
+
+  // 分页逻辑
+  const totalCourses = filteredCourses.length;
+  const totalPages = Math.ceil(totalCourses / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const paginatedCourses = filteredCourses.slice(startIndex, startIndex + pageSize);
+
+  // 页码改变时重置到第一页
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    setCurrentPage(1);
+  };
 
   // 获取课程分类标签
   const getCategoryBadge = (category: string) => {
@@ -935,14 +952,14 @@ export default function Courses() {
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input type="text" placeholder="搜索课程..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="input pl-10" />
+            <input type="text" placeholder="搜索课程..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} className="input pl-10" />
           </div>
 
           {/* 教师选择（仅管理员） */}
           {isAdmin && (
             <select
               value={selectedTeacher || ''}
-              onChange={(e) => setSelectedTeacher(e.target.value)}
+              onChange={(e) => { setSelectedTeacher(e.target.value); setCurrentPage(1); }}
               className="input w-48"
             >
               <option value="">全部教师</option>
@@ -957,7 +974,7 @@ export default function Courses() {
           {/* 班级选择 */}
           <select
             value={selectedClass}
-            onChange={(e) => setSelectedClass(e.target.value)}
+            onChange={(e) => { setSelectedClass(e.target.value); setCurrentPage(1); }}
             className="input w-48"
           >
             <option value="">全部班级</option>
@@ -971,14 +988,14 @@ export default function Courses() {
           {/* 学期选择 */}
           <select
             value={selectedSemesterLabel}
-            onChange={(e) => setSelectedSemesterLabel(e.target.value)}
+            onChange={(e) => { setSelectedSemesterLabel(e.target.value); setCurrentPage(1); }}
             className="input w-40"
           >
             <option value="2025-2026-1">2025-2026-1 学期</option>
             <option value="2025-2026-2">2025-2026-2 学期</option>
           </select>
 
-          <select value={filterCourseType} onChange={(e) => setFilterCourseType(e.target.value as 'all' | '钢琴' | '声乐' | '器乐')} className="input w-32">
+          <select value={filterCourseType} onChange={(e) => { setFilterCourseType(e.target.value as 'all' | '钢琴' | '声乐' | '器乐'); setCurrentPage(1); }} className="input w-32">
             <option value="all">全部类型</option>
             <option value="钢琴">钢琴</option>
             <option value="声乐">声乐</option>
@@ -1047,13 +1064,13 @@ export default function Courses() {
           </div>
         )}
         <div className="table-container overflow-x-auto">
-          <table className="table min-w-full">
+          <table className="table w-full" style={{ tableLayout: 'fixed' }}>
             <thead>
               <tr>
-                <th>
-                  <input 
-                    type="checkbox" 
-                    checked={selectAll} 
+                <th style={{ width: '40px' }} className="text-xs">
+                  <input
+                    type="checkbox"
+                    checked={selectAll}
                     onChange={(e) => {
                       setSelectAll(e.target.checked);
                       if (e.target.checked) {
@@ -1061,29 +1078,28 @@ export default function Courses() {
                       } else {
                         setSelectedCourses([]);
                       }
-                    }} 
+                    }}
                     className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                   />
                 </th>
-                <th>序号</th>
-                <th>课程编号</th>
-                <th>课程名称</th>
-                <th>课程类型</th>
-                <th>授课类型</th>
-                <th>班级类型</th>
-                <th>年级</th>
-                <th>班级</th>
-                <th>总学时</th>
-                <th>周数</th>
-                <th>周学时</th>
-                <th>学分</th>
-                <th>任课教师</th>
-                <th>备注</th>
-                <th>操作</th>
+                <th style={{ width: '50px' }} className="text-xs">序号</th>
+                <th style={{ width: '100px' }} className="text-xs">课程编号</th>
+                <th style={{ width: '140px' }} className="text-xs">课程名称</th>
+                <th style={{ width: '70px' }} className="text-xs">课程类型</th>
+                <th style={{ width: '80px' }} className="text-xs">授课类型</th>
+                <th style={{ width: '70px' }} className="text-xs">班级类型</th>
+                <th style={{ width: '60px' }} className="text-xs">年级</th>
+                <th style={{ width: '100px' }} className="text-xs">班级</th>
+                <th style={{ width: '60px' }} className="text-xs">总学时</th>
+                <th style={{ width: '50px' }} className="text-xs">周数</th>
+                <th style={{ width: '60px' }} className="text-xs">周学时</th>
+                <th style={{ width: '50px' }} className="text-xs">学分</th>
+                <th style={{ width: '80px' }} className="text-xs">任课教师</th>
+                <th style={{ width: '80px' }} className="text-xs">操作</th>
               </tr>
             </thead>
             <tbody>
-              {filteredCourses.length === 0 ? (
+              {paginatedCourses.length === 0 ? (
                 <tr>
                   <td colSpan={15} className="text-center py-8">
                     {selectedClass ? (
@@ -1098,7 +1114,7 @@ export default function Courses() {
                     )}
                   </td>
                 </tr>
-              ) : filteredCourses.map((course, index) => {
+              ) : paginatedCourses.map((course, index) => {
                 const progress = calculateProgress(course);
                 // 从 major_class 提取完整年级（如从"2401"提取"2024级"）
                 const getFullGrade = (majorClass: string | undefined): string => {
@@ -1118,7 +1134,7 @@ export default function Courses() {
                 const isSelected = selectedCourses.includes(course.id);
                 return (
                 <tr key={course.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-gray-100 transition-colors duration-200 border-b border-gray-200`}>
-                  <td className="py-3 px-4">
+                  <td className="py-3 px-2">
                     <input
                       type="checkbox"
                       checked={isSelected}
@@ -1132,22 +1148,22 @@ export default function Courses() {
                       className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                     />
                   </td>
-                  <td className="py-3 px-4">{index + 1}</td>
-                  <td className="py-3 px-4">{course.course_id || '-'}</td>
-                  <td className="py-3 px-4 font-medium">{course.course_name}</td>
-                  <td className="py-3 px-4">
-                    <span className={`badge ${course.course_type === '钢琴' ? 'badge-info' : course.course_type === '声乐' ? 'badge-success' : 'badge-warning'}`}>
+                  <td className="py-3 px-2 text-sm">{startIndex + index + 1}</td>
+                  <td className="py-3 px-2 text-sm break-all">{course.course_id || '-'}</td>
+                  <td className="py-3 px-2 text-sm font-medium break-words">{course.course_name}</td>
+                  <td className="py-3 px-2 text-sm">
+                    <span className={`badge text-xs ${course.course_type === '钢琴' ? 'badge-info' : course.course_type === '声乐' ? 'badge-success' : 'badge-warning'}`}>
                       {course.course_type}
                     </span>
                   </td>
-                  <td className="py-3 px-4">
-                    <span className={`badge ${(course as any).teaching_type === '专业大课' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                  <td className="py-3 px-2 text-sm">
+                    <span className={`badge text-xs ${(course as any).teaching_type === '专业大课' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
                       {(course as any).teaching_type || '专业大课'}
                     </span>
                   </td>
-                  <td className="py-3 px-4">{(course as any).class_type || '普通班'}</td>
-                  <td className="py-3 px-4">{grade}</td>
-                  <td className="py-3 px-4">{
+                  <td className="py-3 px-2 text-sm">{(course as any).class_type || '普通班'}</td>
+                  <td className="py-3 px-2 text-sm">{grade}</td>
+                  <td className="py-3 px-2 text-sm break-words">{
                     (() => {
                       // 优先使用 class_name 字段
                       if ((course as any).class_name) {
@@ -1172,22 +1188,21 @@ export default function Courses() {
                       return course.major_class || '-';
                     })()
                   }</td>
-                  <td className="py-3 px-4">{course.total_hours || progress.required}课时</td>
-                  <td className="py-3 px-4">{(course as any).weeks || 16}</td>
-                  <td className="py-3 px-4">{course.week_frequency || 2}课时/周</td>
-                  <td className="py-3 px-4">
-                    <span className={`badge ${course.credit_hours === 2 ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'}`}>
+                  <td className="py-3 px-2 text-sm">{course.total_hours || progress.required}课时</td>
+                  <td className="py-3 px-2 text-sm">{(course as any).weeks || 16}</td>
+                  <td className="py-3 px-2 text-sm">{course.week_frequency || 2}课时/周</td>
+                  <td className="py-3 px-2 text-sm">
+                    <span className={`badge text-xs ${course.credit_hours === 2 ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'}`}>
                       {course.credit_hours || calculateCredit(course)}学分
                     </span>
                   </td>
-                  <td className="py-3 px-4">{course.teacher_name || teacher?.name || '-'}</td>
-                  <td className="py-3 px-4">{(course as any).remark || '-'}</td>
-                  <td className="py-3 px-4">
-                    <div className="flex gap-2">
-                      <button onClick={() => handleEditCourse(course)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg">
+                  <td className="py-3 px-2 text-sm break-words">{course.teacher_name || teacher?.name || '-'}</td>
+                  <td className="py-3 px-2">
+                    <div className="flex gap-1">
+                      <button onClick={() => handleEditCourse(course)} className="p-1 text-blue-600 hover:bg-blue-50 rounded-lg">
                         <Edit2 className="w-4 h-4" />
                       </button>
-                      <button onClick={() => handleDelete(course.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg">
+                      <button onClick={() => handleDelete(course.id)} className="p-1 text-red-600 hover:bg-red-50 rounded-lg">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -1198,6 +1213,87 @@ export default function Courses() {
             </tbody>
           </table>
         </div>
+
+        {/* 分页组件 */}
+        {totalCourses > 0 && (
+          <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200">
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-gray-700">
+                显示 {startIndex + 1} 到 {Math.min(startIndex + paginatedCourses.length, totalCourses)} 条，共 {totalCourses} 条
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">每页显示:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                  className="px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                >
+                  <option value={5}>5条</option>
+                  <option value={10}>10条</option>
+                  <option value={20}>20条</option>
+                  <option value={50}>50条</option>
+                  <option value={100}>100条</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                className="px-3 py-1 text-sm rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                首页
+              </button>
+              <button
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1 text-sm rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                上一页
+              </button>
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                // 显示当前页附近的页码
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`px-3 py-1 text-sm rounded border ${
+                      currentPage === pageNum
+                        ? 'bg-purple-600 text-white border-purple-600'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+              <button
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 text-sm rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                下一页
+              </button>
+              <button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 text-sm rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                尾页
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 添加/编辑课程弹窗 */}

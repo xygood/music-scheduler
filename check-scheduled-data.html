@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>检查排课数据</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+        h1 { color: #333; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9; }
+        .data-item { padding: 8px; margin: 5px 0; background: white; border: 1px solid #eee; border-radius: 4px; font-family: monospace; font-size: 12px; }
+        .highlight { background-color: #fff3cd; padding: 2px 4px; border-radius: 2px; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>排课数据检查</h1>
+        
+        <div class="section">
+            <h2>王冠慈教师排课数据</h2>
+            <button onclick="checkTeacherData('王冠慈')">检查王冠慈排课数据</button>
+            <div id="teacher-result"></div>
+        </div>
+        
+        <div class="section">
+            <h2>所有数据源统计</h2>
+            <button onclick="checkAllData()">检查所有数据</button>
+            <div id="all-data-result"></div>
+        </div>
+    </div>
+    
+    <script>
+        function getLocalStorageData(key) {
+            try {
+                const data = localStorage.getItem(key);
+                return data ? JSON.parse(data) : [];
+            } catch (e) { return []; }
+        }
+        
+        function checkTeacherData(teacherName) {
+            const resultDiv = document.getElementById('teacher-result');
+            
+            // 获取所有数据源
+            const scheduledClasses = getLocalStorageData('scheduled_classes');
+            const smallClassResults = getLocalStorageData('small_class_results');
+            const largeClassResults = getLocalStorageData('large_class_results');
+            const largeClassSchedules = getLocalStorageData('large_class_schedules');
+            
+            let output = `<h3>数据源统计</h3>`;
+            output += `<div class="data-item">scheduled_classes: ${scheduledClasses.length} 条</div>`;
+            output += `<div class="data-item">small_class_results: ${smallClassResults.length} 条</div>`;
+            output += `<div class="data-item">large_class_results: ${largeClassResults.length} 条</div>`;
+            output += `<div class="data-item">large_class_schedules: ${largeClassSchedules.length} 条</div>`;
+            
+            // 查找王冠慈的排课数据
+            const allData = [...scheduledClasses, ...smallClassResults, ...largeClassResults];
+            const teacherData = allData.filter(d => {
+                const teacherField = d.teacher_name || d.teacher || '';
+                return teacherField.includes(teacherName);
+            });
+            
+            output += `<h3>王冠慈排课数据 (${teacherData.length} 条)</h3>`;
+            teacherData.forEach((d, i) => {
+                output += `<div class="data-item">${i+1}. ${JSON.stringify(d, null, 2)}</div>`;
+            });
+            
+            // 查找大课表中的王冠慈
+            let largeClassEntries = [];
+            largeClassSchedules.forEach(schedule => {
+                if (schedule.entries) {
+                    schedule.entries.forEach(entry => {
+                        if (entry.teacher_name && entry.teacher_name.includes(teacherName)) {
+                            largeClassEntries.push(entry);
+                        }
+                    });
+                }
+            });
+            
+            output += `<h3>王冠慈大课表数据 (${largeClassEntries.length} 条)</h3>`;
+            largeClassEntries.forEach((d, i) => {
+                output += `<div class="data-item">${i+1}. ${JSON.stringify(d, null, 2)}</div>`;
+            });
+            
+            resultDiv.innerHTML = output;
+        }
+        
+        function checkAllData() {
+            const resultDiv = document.getElementById('all-data-result');
+            
+            const keys = [
+                'scheduled_classes',
+                'music_scheduler_scheduled_classes',
+                'small_class_results',
+                'music_scheduler_small_class_results',
+                'large_class_results',
+                'music_scheduler_large_class_results',
+                'large_class_schedules'
+            ];
+            
+            let output = '';
+            keys.forEach(key => {
+                const data = getLocalStorageData(key);
+                output += `<div class="data-item"><strong>${key}:</strong> ${data.length} 条数据</div>`;
+                
+                if (data.length > 0 && key !== 'large_class_schedules') {
+                    // 显示第一条数据的结构
+                    output += `<div class="data-item" style="margin-left: 20px; font-size: 11px;">示例: ${JSON.stringify(data[0], null, 2).substring(0, 500)}...</div>`;
+                } else if (data.length > 0 && key === 'large_class_schedules') {
+                    // 显示大课表结构
+                    const schedule = data[0];
+                    output += `<div class="data-item" style="margin-left: 20px; font-size: 11px;">大课表: ${schedule.name || '未命名'}, 条目数: ${schedule.entries ? schedule.entries.length : 0}</div>`;
+                    if (schedule.entries && schedule.entries.length > 0) {
+                        output += `<div class="data-item" style="margin-left: 40px; font-size: 11px;">示例条目: ${JSON.stringify(schedule.entries[0], null, 2)}</div>`;
+                    }
+                }
+            });
+            
+            resultDiv.innerHTML = output;
+        }
+        
+        // 页面加载时自动检查
+        window.onload = function() {
+            checkAllData();
+        };
+    </script>
+</body>
+</html>

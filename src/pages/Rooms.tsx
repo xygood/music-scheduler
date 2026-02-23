@@ -621,38 +621,7 @@ export default function Rooms() {
         </div>
       )}
 
-      {/* Excel 导入格式提示 - 移到底部 */}
-      <div className="card mt-6 bg-blue-50 border-blue-200">
-        <div className="flex items-start gap-3">
-          <FileSpreadsheet className="w-5 h-5 text-blue-600 mt-0.5" />
-          <div className="text-sm text-blue-800">
-            <p className="font-medium mb-1">Excel 导入格式：</p>
-            <div className="overflow-x-auto">
-              <table className="text-xs border-collapse mt-2">
-                <thead>
-                  <tr>
-                    <th className="border border-blue-200 px-2 py-1 bg-blue-100">教师</th>
-                    <th className="border border-blue-200 px-2 py-1 bg-blue-100">钢琴琴房</th>
-                    <th className="border border-blue-200 px-2 py-1 bg-blue-100">声乐琴房</th>
-                    <th className="border border-blue-200 px-2 py-1 bg-blue-100">器乐琴房</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td className="border border-blue-200 px-2 py-1">张三</td>
-                    <td className="border border-blue-200 px-2 py-1">203</td>
-                    <td className="border border-blue-200 px-2 py-1">112</td>
-                    <td className="border border-blue-200 px-2 py-1"></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <p className="text-xs mt-2 text-blue-600">
-              提示：一位教师可以关联多个琴房，分别对应钢琴、声乐、器乐三个专业。大教室管理请在"大教室管理"标签页中进行操作。
-            </p>
-          </div>
-        </div>
-      </div>
+
 
       {/* 编辑琴房弹窗 */}
       {showModal && editState && (
