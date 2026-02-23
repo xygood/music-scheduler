@@ -3,6 +3,14 @@ import { v4 as uuidv4 } from 'uuid';
 import type { Student, Course, Room, LargeClassEntry } from '../types';
 import { DAY_OF_WEEK_MAP } from '../types';
 
+// HTML转义函数，防止XSS攻击
+function escapeHtml(text: string): string {
+  if (!text || typeof text !== 'string') return text;
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
 export const excelUtils = {
   async readFile(file: File): Promise<any[]> {
     return new Promise((resolve, reject) => {
@@ -29,16 +37,17 @@ export const excelUtils = {
     data.forEach((row, index) => {
       try {
         // 支持新的10字段结构：班级类型-年级-班级-学号-姓名-主项-副项1-副项2-副项3-备注
-        const classType = row['班级类型'] || row['class_type'];
-        const year = row['年级'] || row['grade'];
-        let className = row['班级'] || row['class'];
-        const studentId = row['学号'] || row['student_id'] || `S${String(index + 1).padStart(4, '0')}`;
-        const name = row['姓名'] || row['name'] || `学生${index + 1}`;
-        const primaryInstrument = row['主项'] || row['primary_instrument'] || '';
-        const secondary1 = row['副项1'] || row['secondary1'] || '';
-        const secondary2 = row['副项2'] || row['secondary2'] || '';
-        const secondary3 = row['副项3'] || row['secondary3'] || '';
-        const remarks = row['备注'] || row['remarks'] || '';
+        // 对导入的字符串数据进行HTML转义，防止XSS攻击
+        const classType = escapeHtml(row['班级类型'] || row['class_type']);
+        const year = escapeHtml(row['年级'] || row['grade']);
+        let className = escapeHtml(row['班级'] || row['class']);
+        const studentId = escapeHtml(row['学号'] || row['student_id'] || `S${String(index + 1).padStart(4, '0')}`);
+        const name = escapeHtml(row['姓名'] || row['name'] || `学生${index + 1}`);
+        const primaryInstrument = escapeHtml(row['主项'] || row['primary_instrument'] || '');
+        const secondary1 = escapeHtml(row['副项1'] || row['secondary1'] || '');
+        const secondary2 = escapeHtml(row['副项2'] || row['secondary2'] || '');
+        const secondary3 = escapeHtml(row['副项3'] || row['secondary3'] || '');
+        const remarks = escapeHtml(row['备注'] || row['remarks'] || '');
 
         // 验证必填字段
         if (!classType) throw new Error(`班级类型为必填项（普通班/专升本）`);
@@ -144,10 +153,10 @@ export const excelUtils = {
   parseCourses(data: any[], teacherId: string): Omit<Course, 'id' | 'created_at'>[] {
     return data.map((row, index) => ({
       teacher_id: teacherId,
-      course_name: row['课程名称'] || row['course_name'] || `课程${index + 1}`,
-      course_type: (row['课程类型'] || row['course_type'] || '钢琴') as '钢琴' | '声乐' | '器乐',
-      student_id: row['学生ID'] || row['student_id'],
-      student_name: row['学生姓名'] || row['student_name'],
+      course_name: escapeHtml(row['课程名称'] || row['course_name'] || `课程${index + 1}`),
+      course_type: (escapeHtml(row['课程类型'] || row['course_type'] || '钢琴')) as '钢琴' | '声乐' | '器乐',
+      student_id: row['学生ID'] || row['student_id'] ? escapeHtml(row['学生ID'] || row['student_id']) : undefined,
+      student_name: row['学生姓名'] || row['student_name'] ? escapeHtml(row['学生姓名'] || row['student_name']) : undefined,
       duration: parseInt(row['课时长度'] || row['duration'] || '30'),
       week_frequency: parseInt(row['每周次数'] || row['week_frequency'] || '1'),
       course_category: 'general' as const,
@@ -157,8 +166,8 @@ export const excelUtils = {
   parseRooms(data: any[], teacherId: string): Omit<Room, 'id' | 'created_at'>[] {
     return data.map((row, index) => ({
       teacher_id: teacherId,
-      room_name: row['教室名称'] || row['room_name'] || `教室${index + 1}`,
-      room_type: (row['教室类型'] || row['room_type'] || '琴房') as '琴房' | '教室' | '大教室' | '排练厅',
+      room_name: escapeHtml(row['教室名称'] || row['room_name'] || `教室${index + 1}`),
+      room_type: (escapeHtml(row['教室类型'] || row['room_type'] || '琴房')) as '琴房' | '教室' | '大教室' | '排练厅',
       capacity: parseInt(row['容量'] || row['capacity'] || '1'),
     }));
   },
