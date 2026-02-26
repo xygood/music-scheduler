@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>调试禁排时段数据</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        h2 {
+            color: #555;
+            margin-top: 30px;
+        }
+        pre {
+            background-color: #f8f8f8;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .slot-item {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .slot-item h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .slot-item p {
+            margin: 5px 0;
+        }
+        .filter-section {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+        }
+        .filter-section input {
+            margin: 5px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .filter-section button {
+            margin: 5px;
+            padding: 8px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .filter-section button:hover {
+            background-color: #45a049;
+        }
+        .highlight {
+            background-color: yellow;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>调试禁排时段数据</h1>
+        
+        <div class="filter-section">
+            <h3>过滤器</h3>
+            <label>周次: <input type="number" id="weekFilter" placeholder="输入周次"></label>
+            <label>星期: <input type="number" id="dayFilter" placeholder="输入星期"></label>
+            <label>班级: <input type="text" id="classFilter" placeholder="输入班级名称"></label>
+            <button onclick="filterSlots()">应用过滤器</button>
+            <button onclick="resetFilter()">重置</button>
+        </div>
+        
+        <h2>1. 所有禁排时段</h2>
+        <pre id="blockedSlotsData"></pre>
+        
+        <h2>2. 禁排时段详情</h2>
+        <div id="blockedSlotsList"></div>
+        
+        <h2>3. 测试班级匹配</h2>
+        <div class="filter-section">
+            <label>测试班级名称: <input type="text" id="testClassName" value="音乐学2401"></label>
+            <button onclick="testClassMatch()">测试匹配</button>
+        </div>
+        <pre id="classMatchResult"></pre>
+        
+        <h2>4. 存储键检查</h2>
+        <pre id="storageKeys"></pre>
+    </div>
+    
+    <script>
+        // 检查 LocalStorage 中的禁排时段数据
+        function checkBlockedSlots() {
+            // 获取所有禁排时段
+            const blockedSlots = localStorage.getItem('music_scheduler_blocked_slots');
+            const blockedSlotsData = document.getElementById('blockedSlotsData');
+            const blockedSlotsList = document.getElementById('blockedSlotsList');
+            const storageKeys = document.getElementById('storageKeys');
+            
+            if (blockedSlots) {
+                blockedSlotsData.textContent = blockedSlots;
+                
+                // 解析并显示禁排时段详情
+                const slots = JSON.parse(blockedSlots);
+                slots.forEach((slot, index) => {
+                    const slotItem = document.createElement('div');
+                    slotItem.className = 'slot-item';
+                    slotItem.innerHTML = `
+                        <h3>禁排时段 ${index + 1}</h3>
+                        <p><strong>ID:</strong> ${slot.id}</p>
+                        <p><strong>学期:</strong> ${slot.semester_label}</p>
+                        <p><strong>类型:</strong> ${slot.type}</p>
+                        <p><strong>周次:</strong> ${slot.week_number}</p>
+                        <p><strong>星期:</strong> ${slot.day_of_week}</p>
+                        <p><strong>开始节次:</strong> ${slot.start_period}</p>
+                        <p><strong>结束节次:</strong> ${slot.end_period}</p>
+                        <p><strong>原因:</strong> ${slot.reason}</p>
+                        <p><strong>创建时间:</strong> ${slot.created_at}</p>
+                        <p><strong>班级关联:</strong> ${slot.class_associations ? JSON.stringify(slot.class_associations) : '无'}</p>
+                        <p><strong>特定周次:</strong> ${slot.specific_week_days ? JSON.stringify(slot.specific_week_days) : '无'}</p>
+                    `;
+                    blockedSlotsList.appendChild(slotItem);
+                });
+            } else {
+                blockedSlotsData.textContent = '没有禁排时段数据';
+                blockedSlotsList.innerHTML = '<p>没有禁排时段数据</p>';
+            }
+            
+            // 检查所有存储键
+            const keys = Object.keys(localStorage);
+            let keysText = '存储键列表:\n';
+            keys.forEach(key => {
+                keysText += `- ${key}\n`;
+            });
+            storageKeys.textContent = keysText;
+        }
+        
+        // 过滤禁排时段
+        function filterSlots() {
+            const weekFilter = document.getElementById('weekFilter').value;
+            const dayFilter = document.getElementById('dayFilter').value;
+            const classFilter = document.getElementById('classFilter').value;
+            
+            const blockedSlots = localStorage.getItem('music_scheduler_blocked_slots');
+            const blockedSlotsList = document.getElementById('blockedSlotsList');
+            
+            if (blockedSlots) {
+                const slots = JSON.parse(blockedSlots);
+                const filteredSlots = slots.filter(slot => {
+                    const matchesWeek = !weekFilter || slot.week_number == weekFilter;
+                    const matchesDay = !dayFilter || slot.day_of_week == dayFilter;
+                    const matchesClass = !classFilter || 
+                        !slot.class_associations || 
+                        slot.class_associations.some(assoc => {
+                            if (typeof assoc === 'string') {
+                                return assoc.includes(classFilter) || classFilter.includes(assoc);
+                            } else {
+                                return assoc.name.includes(classFilter) || classFilter.includes(assoc.name);
+                            }
+                        });
+                    return matchesWeek && matchesDay && matchesClass;
+                });
+                
+                // 显示过滤结果
+                blockedSlotsList.innerHTML = '';
+                filteredSlots.forEach((slot, index) => {
+                    const slotItem = document.createElement('div');
+                    slotItem.className = 'slot-item';
+                    slotItem.innerHTML = `
+                        <h3>禁排时段 ${index + 1} <span class="highlight">(匹配)</span></h3>
+                        <p><strong>ID:</strong> ${slot.id}</p>
+                        <p><strong>学期:</strong> ${slot.semester_label}</p>
+                        <p><strong>类型:</strong> ${slot.type}</p>
+                        <p><strong>周次:</strong> ${slot.week_number}</p>
+                        <p><strong>星期:</strong> ${slot.day_of_week}</p>
+                        <p><strong>开始节次:</strong> ${slot.start_period}</p>
+                        <p><strong>结束节次:</strong> ${slot.end_period}</p>
+                        <p><strong>原因:</strong> ${slot.reason}</p>
+                        <p><strong>创建时间:</strong> ${slot.created_at}</p>
+                        <p><strong>班级关联:</strong> ${slot.class_associations ? JSON.stringify(slot.class_associations) : '无'}</p>
+                    `;
+                    blockedSlotsList.appendChild(slotItem);
+                });
+            }
+        }
+        
+        // 重置过滤器
+        function resetFilter() {
+            document.getElementById('weekFilter').value = '';
+            document.getElementById('dayFilter').value = '';
+            document.getElementById('classFilter').value = '';
+            checkBlockedSlots();
+        }
+        
+        // 测试班级匹配
+        function testClassMatch() {
+            const testClassName = document.getElementById('testClassName').value;
+            const blockedSlots = localStorage.getItem('music_scheduler_blocked_slots');
+            const classMatchResult = document.getElementById('classMatchResult');
+            
+            if (blockedSlots) {
+                const slots = JSON.parse(blockedSlots);
+                const matchResults = [];
+                
+                slots.forEach((slot, index) => {
+                    if (slot.class_associations && slot.class_associations.length > 0) {
+                        const matches = slot.class_associations.map((assoc, assocIndex) => {
+                            let match = false;
+                            let reason = '';
+                            
+                            if (typeof assoc === 'string') {
+                                match = assoc === testClassName || 
+                                        testClassName.includes(assoc) || 
+                                        assoc.includes(testClassName);
+                                reason = `字符串匹配: ${assoc} vs ${testClassName}`;
+                            } else {
+                                match = assoc.id === testClassName || 
+                                        assoc.name === testClassName ||
+                                        assoc.id === testClassName ||
+                                        assoc.name === testClassName ||
+                                        testClassName.includes(assoc.name || '') ||
+                                        (assoc.name || '').includes(testClassName);
+                                reason = `对象匹配: ${assoc.name || assoc.id} vs ${testClassName}`;
+                            }
+                            
+                            return { assoc, match, reason };
+                        });
+                        
+                        const hasMatch = matches.some(m => m.match);
+                        matchResults.push({
+                            slotIndex: index,
+                            slot: slot,
+                            matches: matches,
+                            hasMatch: hasMatch
+                        });
+                    }
+                });
+                
+                // 显示匹配结果
+                let resultText = `测试班级名称: ${testClassName}\n\n`;
+                matchResults.forEach(result => {
+                    resultText += `禁排时段 ${result.slotIndex + 1}: ${result.hasMatch ? '匹配' : '不匹配'}\n`;
+                    resultText += `  周次: ${result.slot.week_number}, 星期: ${result.slot.day_of_week}, 节次: ${result.slot.start_period}-${result.slot.end_period}\n`;
+                    result.matches.forEach((m, i) => {
+                        resultText += `  班级 ${i + 1}: ${m.match ? '匹配' : '不匹配'} - ${m.reason}\n`;
+                    });
+                    resultText += '\n';
+                });
+                
+                classMatchResult.textContent = resultText;
+            }
+        }
+        
+        // 页面加载时检查
+        window.onload = checkBlockedSlots;
+    </script>
+</body>
+</html>
