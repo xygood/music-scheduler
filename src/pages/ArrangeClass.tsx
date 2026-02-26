@@ -6619,7 +6619,7 @@ export default function ArrangeClass() {
                           }
                         </td>
                         <td className="px-4 py-2 text-sm text-gray-500 font-mono">{result.groupSize}</td>
-                        <td className="px-4 py-2 text-sm text-gray-500 font-mono" dangerouslySetInnerHTML={{ __html: result.scheduleTime }}></td>
+                        <td className="px-4 py-2 text-sm text-gray-500 font-mono whitespace-pre-wrap">{result.scheduleTime || ''}</td>
                         <td className="px-4 py-2 text-sm text-gray-500 font-mono">{result.scheduledHours}</td>
                         <td className="px-4 py-2 text-sm text-gray-500">
                           {(() => {
@@ -6799,11 +6799,11 @@ export default function ArrangeClass() {
                 </div>
                 <div className="md:col-span-1">
                   <p className="text-xs text-gray-500">排课时间</p>
-                  <p className="text-sm" dangerouslySetInnerHTML={{ __html: selectedTimeSlots.length > 0 ? formatScheduleTime(selectedTimeSlots.map(slot => ({
+                  <p className="text-sm whitespace-pre-wrap">{selectedTimeSlots.length > 0 ? formatScheduleTime(selectedTimeSlots.map(slot => ({
                     ...slot,
                     start_week: slot.week,
                     end_week: slot.week
-                  }))) : '未选择时间' }}></p>
+                  }))) : '未选择时间'}</p>
                 </div>
                 <div className="md:col-span-1">
                   <p className="text-xs text-gray-500">已排课时</p>

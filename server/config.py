@@ -3,6 +3,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+def must_env(name: str) -> str:
+    """生产环境必须配置的环境变量"""
+    v = os.environ.get(name)
+    if not v:
+        raise RuntimeError(f"生产环境缺少必要的环境变量: {name}")
+    return v
+
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY', 'music-scheduler-secret-key-2026')
     
@@ -30,7 +37,18 @@ class DevelopmentConfig(Config):
 class ProductionConfig(Config):
     DEBUG = False
     USE_MYSQL = True
-    SQLALCHEMY_DATABASE_URI = Config.MYSQL_SQLALCHEMY_URI
+    
+    @property
+    def SECRET_KEY(self):
+        return must_env('SECRET_KEY')
+    
+    @property
+    def MYSQL_PASSWORD(self):
+        return must_env('MYSQL_PASSWORD')
+    
+    @property
+    def SQLALCHEMY_DATABASE_URI(self):
+        return f"mysql+pymysql://{Config.MYSQL_USER}:{self.MYSQL_PASSWORD}@{Config.MYSQL_HOST}:{Config.MYSQL_PORT}/{Config.MYSQL_DATABASE}?charset=utf8mb4"
 
 class LocalConfig(Config):
     DEBUG = True

@@ -1122,14 +1122,16 @@ export default function AdminDashboard() {
             )}
           </div>
 
-          {/* 分布模块容器 */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-purple-600" />
-                <h3 className="text-lg font-semibold text-gray-900">分布统计</h3>
-              </div>
-            </div>
+          {isAdmin && (
+            <>
+              {/* 分布模块容器 */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5 text-purple-600" />
+                    <h3 className="text-lg font-semibold text-gray-900">分布统计</h3>
+                  </div>
+                </div>
 
             {/* 分布类型选项卡 */}
             <div className="mb-6">
@@ -2046,7 +2048,9 @@ export default function AdminDashboard() {
             </div>
               </>
             )}
-          </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 

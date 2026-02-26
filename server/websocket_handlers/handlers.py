@@ -1,3 +1,4 @@
+from flask import request
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from models.database import get_db
 from models.schedule import ScheduledClass
