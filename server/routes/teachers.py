@@ -1,6 +1,7 @@
 from flask import request, jsonify
 from models.database import get_db
 from models.teacher import Teacher
+from models.room import Room
 from . import api_bp
 import uuid
 from datetime import datetime
@@ -226,6 +227,103 @@ def remove_room_from_teacher(teacher_id, room_id):
         teacher.fixed_rooms = [r for r in fixed_rooms if r.get('room_id') != room_id]
         db.commit()
         return jsonify(teacher.to_dict())
+    except Exception as e:
+        db.rollback()
+        return jsonify({'error': str(e)}), 400
+    finally:
+        db.close()
+
+@api_bp.route('/teachers/import-rooms', methods=['POST'])
+def import_teacher_rooms():
+    """批量导入教师琴房关联"""
+    db = next(get_db())
+    try:
+        entries = request.get_json()
+        success = 0
+        failed = 0
+        errors = []
+        
+        for entry in entries:
+            teacher_identifier = entry.get('teacherIdentifier')
+            if not teacher_identifier:
+                continue
+            
+            # 查找教师（通过工号或姓名）
+            teacher = db.query(Teacher).filter(
+                (Teacher.teacher_id == teacher_identifier) | (Teacher.name == teacher_identifier)
+            ).first()
+            
+            if not teacher:
+                failed += 1
+                errors.append(f'教师不存在: {teacher_identifier}')
+                continue
+            
+            fixed_rooms = teacher.fixed_rooms or []
+            
+            # 处理各类琴房
+            room_types = [
+                ('pianoRoom', 'PIANO', '钢琴琴房'),
+                ('vocalRoom', 'VOCAL', '声乐琴房'),
+                ('instrumentRoom', 'INSTRUMENT', '器乐琴房'),
+            ]
+            
+            for room_key, faculty_code, room_type_name in room_types:
+                room_name = entry.get(room_key)
+                if room_name and room_name.strip():
+                    # 检查是否已存在该琴房
+                    room = db.query(Room).filter(Room.room_name == room_name.strip()).first()
+                    if not room:
+                        # 创建新琴房
+                        room = Room(
+                            id=str(uuid.uuid4()),
+                            room_name=room_name.strip(),
+                            room_type=room_type_name,
+                            faculty_code=faculty_code,
+                            status='空闲'
+                        )
+                        db.add(room)
+                        db.flush()
+                    
+                    # 检查教师是否已关联该琴房
+                    if not any(r.get('room_id') == room.id for r in fixed_rooms):
+                        fixed_rooms.append({
+                            'room_id': room.id,
+                            'room_name': room.room_name,
+                            'faculty_code': faculty_code
+                        })
+            
+            # 处理大教室
+            large_classroom = entry.get('largeClassroom')
+            if large_classroom and large_classroom.strip():
+                capacity = int(entry.get('largeClassroomCapacity', 100) or 100)
+                room = db.query(Room).filter(Room.room_name == large_classroom.strip()).first()
+                if not room:
+                    room = Room(
+                        id=str(uuid.uuid4()),
+                        room_name=large_classroom.strip(),
+                        room_type='大教室',
+                        capacity=capacity,
+                        status='空闲'
+                    )
+                    db.add(room)
+                    db.flush()
+                
+                if not any(r.get('room_id') == room.id for r in fixed_rooms):
+                    fixed_rooms.append({
+                        'room_id': room.id,
+                        'room_name': room.room_name,
+                        'room_type': '大教室'
+                    })
+            
+            teacher.fixed_rooms = fixed_rooms
+            success += 1
+        
+        db.commit()
+        return jsonify({
+            'success': success,
+            'failed': failed,
+            'errors': errors
+        })
     except Exception as e:
         db.rollback()
         return jsonify({'error': str(e)}), 400

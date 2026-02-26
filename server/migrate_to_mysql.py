@@ -284,16 +284,19 @@ def migrate_courses(engine, data):
                                         teacher_id, teacher_name, student_id, student_name,
                                         major_class, academic_year, semester, semester_label,
                                         course_category, primary_instrument, secondary_instrument,
-                                        duration, week_frequency, credit, required_hours,
+                                        duration, week_frequency, credit, credit_hours, required_hours, total_hours, weeks,
                                         group_size, student_count, teaching_type, created_at)
                     VALUES (:id, :course_id, :course_name, :course_type, :faculty_id,
                            :teacher_id, :teacher_name, :student_id, :student_name,
                            :major_class, :academic_year, :semester, :semester_label,
                            :course_category, :primary_instrument, :secondary_instrument,
-                           :duration, :week_frequency, :credit, :required_hours,
+                           :duration, :week_frequency, :credit, :credit_hours, :required_hours, :total_hours, :weeks,
                            :group_size, :student_count, :teaching_type, :created_at)
                     ON DUPLICATE KEY UPDATE
                         course_name = VALUES(course_name),
+                        credit_hours = VALUES(credit_hours),
+                        total_hours = VALUES(total_hours),
+                        weeks = VALUES(weeks),
                         updated_at = NOW()
                 """), {
                     'id': safe_value(course.get('id'), str(uuid.uuid4())),
@@ -314,8 +317,11 @@ def migrate_courses(engine, data):
                     'secondary_instrument': course.get('secondary_instrument'),
                     'duration': safe_value(course.get('duration'), 30),
                     'week_frequency': safe_value(course.get('week_frequency'), 1),
-                    'credit': safe_value(course.get('credit'), 1),
-                    'required_hours': safe_value(course.get('required_hours'), 16),
+                    'credit': safe_value(course.get('credit') or course.get('credit_hours'), 1),
+                    'credit_hours': safe_value(course.get('credit_hours') or course.get('credit'), 1),
+                    'required_hours': safe_value(course.get('required_hours') or course.get('total_hours'), 16),
+                    'total_hours': safe_value(course.get('total_hours') or course.get('required_hours'), 16),
+                    'weeks': safe_value(course.get('weeks'), 16),
                     'group_size': safe_value(course.get('group_size'), 1),
                     'student_count': safe_value(course.get('student_count'), 1),
                     'teaching_type': course.get('teaching_type'),

@@ -1,7 +1,8 @@
 # MySQL 数据库迁移方案
 
-> **版本**: 1.0.0  
+> **版本**: 1.4.0  
 > **创建日期**: 2026-02-25  
+> **更新日期**: 2026-02-27  
 > **状态**: 待实施
 
 ---
@@ -44,7 +45,7 @@
 | 2 | 教师 | `music_scheduler_teachers` | `teachers` | 17 | 50+ |
 | 3 | 学生 | `music_scheduler_students` | `students` | 20 | 500+ |
 | 4 | 班级 | `music_scheduler_classes` | `classes` | 8 | 20+ |
-| 5 | 课程 | `music_scheduler_courses` | `courses` | 19 | 200+ |
+| 5 | 课程 | `music_scheduler_courses` | `courses` | 22 | 200+ |
 | 6 | 教室 | `music_scheduler_rooms` | `rooms` | 11 | 50+ |
 | 7 | 排课记录 | `music_scheduler_scheduled_classes` | `scheduled_classes` | 18 | 1000+ |
 | 8 | 禁排时段 | `music_scheduler_blocked_slots` | `blocked_slots` | 14 | 50+ |
@@ -53,6 +54,8 @@
 | 11 | 学生-教师分配 | `music_scheduler_student_teacher_assignments` | `student_teacher_assignments` | 13 | 500+ |
 | 12 | 操作日志 | `music_scheduler_operation_logs` | `operation_logs` | 10 | 1000+ |
 | 13 | 在线教师 | `music_scheduler_online_teachers` | `online_teachers` | 7 | 实时 |
+
+> **说明**：`priority_blocked_times`（优先级禁排时间）是派生数据，由系统从大课表等数据自动生成，无需迁移。迁移完成后调用 `largeClassBlockedTimeService.generateBlockedTimesFromLargeClasses()` 即可生成。
 
 ### 2.2 数据关系图
 
@@ -858,6 +861,7 @@ curl -X POST http://your-server/api/sync/import \
 > **说明**: 
 > - 数据库主键是UUID，但 `to_dict()` 返回的 `id` 字段是学号
 > - `instrument` 和 `grade_text` 是前端计算字段，不需要存储在数据库中
+> - `notes` 和 `remarks` 是同义字段，`notes` 用于学生备注，`remarks` 用于其他备注
 
 ### 8.3 课程表 (courses) ⚠️ 需注意字段映射
 
@@ -882,19 +886,21 @@ curl -X POST http://your-server/api/sync/import \
 | `duration` | `duration` | INT | ✅ |
 | `week_frequency` | `week_frequency` | INT | ✅ |
 | `credit` | `credit` | INT | ✅ |
-| `credit_hours` | `credit` | INT | ⚠️ 映射到credit字段 |
+| `credit_hours` | `credit_hours` | INT | ✅ 兼容字段，已迁移 |
 | `required_hours` | `required_hours` | INT | ✅ |
-| `total_hours` | `required_hours` | INT | ⚠️ 映射到required_hours字段 |
-| `weeks` | - | - | ⚠️ 前端计算字段，不存储 |
+| `total_hours` | `total_hours` | INT | ✅ 兼容字段，已迁移 |
+| `weeks` | `weeks` | INT | ✅ 兼容字段，已迁移 |
 | `group_size` | `group_size` | INT | ✅ |
 | `student_count` | `student_count` | INT | ✅ |
 | `teaching_type` | `teaching_type` | VARCHAR(50) | ✅ |
+| `class_type` | `teaching_type` | VARCHAR(50) | ⚠️ 映射到teaching_type |
+| `remark` | - | - | ⚠️ 前端计算字段，不存储 |
 
 > **重要说明**：
-> - `credit_hours` 在前端是可选字段，后端映射到 `credit` 字段
-> - `total_hours` 在前端是可选字段，后端映射到 `required_hours` 字段
-> - `weeks` 是前端计算字段，不需要存储在数据库中
-> - `sync.py` 中已做兼容处理：`credit=c.get('credit') or c.get('credit_hours', 1)`
+> - `credit_hours`、`total_hours`、`weeks` 已添加到MySQL表作为兼容字段
+> - 迁移脚本已更新，支持双向映射：`credit ↔ credit_hours`、`required_hours ↔ total_hours`
+> - `class_type` 字段映射到 `teaching_type`，前端代码中两者混用
+> - `remark` 是前端临时字段，不需要存储到数据库
 
 ### 8.4 排课表 (scheduled_classes) ✅ 完全匹配
 
@@ -1132,6 +1138,11 @@ ALTER TABLE scheduled_classes
 ADD UNIQUE KEY uk_room_time (room_id, day_of_week, period, semester_label);
 ```
 
+> ⚠️ **重要提示**：添加唯一约束前需先清理数据！
+> - 当前数据中存在 `semester_label` 为空的记录（约1232条）
+> - 存在同一教师时间周次的重复记录（约302组）
+> - **建议**：迁移后先清理数据（补充学期标签、删除重复记录），再添加唯一约束
+
 #### 方案三：WebSocket实时同步（已实现）
 
 ```python
@@ -1273,6 +1284,51 @@ ON DELETE SET NULL;
 | 排课查询 | 1000条排课记录 | < 200ms |
 | 学生查询 | 500条学生记录 | < 100ms |
 | 并发写入 | 10个并发请求 | 全部成功 |
+
+---
+
+## 十二B、类型定义注意事项
+
+### 12B.1 前端类型定义问题
+
+在 `src/types/index.ts` 中存在以下类型定义问题，迁移时需注意：
+
+| 问题 | 描述 | 影响 |
+|------|------|------|
+| `as any` 类型转换 | Courses.tsx 中大量使用 `(course as any).teaching_type` | 类型安全性降低 |
+| `id` 字段含义 | 文档说返回工号/学号，但类型定义中 `id` 和 `teacher_id`/`student_id` 是独立字段 | 可能导致混淆 |
+| 可选字段过多 | 许多关键字段定义为可选（如 `teacher_id?: string`） | 可能导致数据不完整 |
+
+### 12B.2 建议修复
+
+**Course 类型定义完善**：
+```typescript
+export interface Course {
+  // ... 现有字段
+  teaching_type: '专业大课' | '小组课';  // 建议改为必填
+  class_type?: '普通班' | '专升本';      // 映射到 teaching_type
+  weeks: number;                         // 建议改为必填
+  credit_hours: number;                  // 建议改为必填
+  total_hours: number;                   // 建议改为必填
+}
+```
+
+**Student 类型定义完善**：
+```typescript
+export interface Student {
+  // ... 现有字段
+  assigned_teachers?: {
+    primary_teacher_id?: string;
+    primary_teacher_name?: string;
+    secondary1_teacher_id?: string;      // 已在数据库定义
+    secondary1_teacher_name?: string;
+    secondary2_teacher_id?: string;
+    secondary2_teacher_name?: string;
+    secondary3_teacher_id?: string;
+    secondary3_teacher_name?: string;
+  };
+}
+```
 
 ---
 

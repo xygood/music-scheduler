@@ -145,6 +145,7 @@ const Teachers: React.FC = () => {
   // 打开编辑教师弹窗
   const handleOpenEditModal = (teacher: Teacher) => {
     setIsEditing(true);
+    setSelectedTeacher(teacher);
     setFormData({
       ...teacher,
       can_teach_instruments: [...(teacher.can_teach_instruments || [])],

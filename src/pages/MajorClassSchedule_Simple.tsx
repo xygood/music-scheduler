@@ -24,6 +24,7 @@ import ConflictDetector from '../components/MajorClassSchedule/ConflictDetector'
 import { WEEKDAYS, CourseStatus, CourseScheduleStatus, Class } from '../components/MajorClassSchedule/types';
 import { getWeekRange, isWeekBlocked, isSlotAvailable, getActualIndex, generateDefaultCourseStatus, generateScheduleRecord, detectConflicts, processBatchSelection } from '../components/MajorClassSchedule/utils';
 
+const USE_DATABASE = import.meta.env.VITE_USE_DATABASE === 'true';
 
 export default function MajorClassSchedule() {
   const { user, teacher, isAdmin } = useAuth();
@@ -1968,7 +1969,7 @@ export default function MajorClassSchedule() {
       
       // 创建排课记录
       setProgress(40);
-      const newSchedules = [];
+      const newSchedules: any[] = [];
       
       if (selectedCourses.length > 1) {
         // 合班上课：为每个选中的课程创建排课记录
@@ -1985,7 +1986,7 @@ export default function MajorClassSchedule() {
               start_week: slot.week,
               end_week: slot.week,
               created_at: new Date().toISOString(),
-              status: 'draft' // 标记为草稿状态
+              status: 'draft'
             });
           }
         }
@@ -2003,38 +2004,63 @@ export default function MajorClassSchedule() {
             start_week: slot.week,
             end_week: slot.week,
             created_at: new Date().toISOString(),
-            status: 'draft' // 标记为草稿状态
+            status: 'draft'
           });
         }
       }
 
-      
-      // 保存到本地存储
       setProgress(70);
-      
-      // 先读取当前存储数据
-      let currentStorageData = JSON.parse(localStorage.getItem('music_scheduler_scheduled_classes') || '[]');
-      
-      // 删除所有选中班级的现有排课记录，以防冲突
-      let filteredStorageData;
-      if (selectedCourses.length > 1) {
-        // 合班上课：删除所有选中班级的现有排课记录
-        const selectedStatuses = courseScheduleStatuses.filter(status => selectedCourses.includes(status.id));
-        const selectedClassIds = selectedStatuses.map(status => status.class_id);
-        filteredStorageData = currentStorageData.filter((item: any) => 
-          !(item.course_id === currentCourse.course_id && selectedClassIds.includes(item.class_id))
+
+      if (USE_DATABASE) {
+        // 数据库模式：先删除旧排课，再写入新排课
+        const targetPairs = new Set<string>();
+
+        if (selectedCourses.length > 1) {
+          const selectedStatuses = courseScheduleStatuses.filter(status => selectedCourses.includes(status.id));
+          selectedStatuses.forEach(status => {
+            targetPairs.add(`${status.course_id}-${status.class_id}`);
+          });
+        } else if (currentCourse) {
+          const classId = selectedClass || currentCourse.class_id;
+          targetPairs.add(`${currentCourse.course_id}-${classId}`);
+        }
+
+        const schedulesToDelete = scheduledClasses.filter((item: any) =>
+          targetPairs.has(`${item.course_id}-${item.class_id}`)
+        );
+
+        for (const sc of schedulesToDelete) {
+          await scheduleService.delete(sc.id);
+        }
+
+        setProgress(80);
+        await scheduleService.createMany(
+          newSchedules.map(s => ({
+            ...s,
+            semester_label: selectedSemesterLabel,
+          }))
         );
       } else {
-        // 单个班级：删除当前课程的现有排课记录
-        filteredStorageData = currentStorageData.filter((item: any) => 
-          item.course_id !== currentCourse.course_id
-        );
+        // 本地模式：保留原有 localStorage 行为
+        let currentStorageData = JSON.parse(localStorage.getItem('music_scheduler_scheduled_classes') || '[]');
+
+        let filteredStorageData;
+        if (selectedCourses.length > 1) {
+          const selectedStatuses = courseScheduleStatuses.filter(status => selectedCourses.includes(status.id));
+          const selectedClassIds = selectedStatuses.map(status => status.class_id);
+          filteredStorageData = currentStorageData.filter((item: any) => 
+            !(item.course_id === currentCourse.course_id && selectedClassIds.includes(item.class_id))
+          );
+        } else {
+          filteredStorageData = currentStorageData.filter((item: any) => 
+            item.course_id !== currentCourse.course_id
+          );
+        }
+        
+        setProgress(80);
+        const updatedStorageData = [...filteredStorageData, ...newSchedules];
+        localStorage.setItem('music_scheduler_scheduled_classes', JSON.stringify(updatedStorageData));
       }
-      
-      // 合并新排课记录并保存
-      setProgress(80);
-      const updatedStorageData = [...filteredStorageData, ...newSchedules];
-      localStorage.setItem('music_scheduler_scheduled_classes', JSON.stringify(updatedStorageData));
       
       // 清空选择
       setSelectedTimeSlots([]);
@@ -2054,7 +2080,7 @@ export default function MajorClassSchedule() {
     } finally {
       setSaving(false);
     }
-  }, [currentCourse, selectedTimeSlots, detectConflicts, rooms, scheduleService, selectedClass, selectedRoom]);
+  }, [currentCourse, selectedTimeSlots, detectConflicts, rooms, scheduleService, selectedClass, selectedRoom, selectedCourses, courseScheduleStatuses, scheduledClasses, selectedSemesterLabel]);
   
   // 保存排课结果（与 handleSchedule 功能相同）
   const handleSaveSchedule = useCallback(async () => {
@@ -2210,7 +2236,7 @@ export default function MajorClassSchedule() {
       
       // 创建排课记录
       setProgress(40);
-      const newSchedules = [];
+      const newSchedules: any[] = [];
       
       if (selectedCourses.length > 1) {
         // 合班上课：为每个选中的课程创建排课记录
@@ -2227,7 +2253,7 @@ export default function MajorClassSchedule() {
               start_week: slot.week,
               end_week: slot.week,
               created_at: new Date().toISOString(),
-              status: 'draft' // 标记为草稿状态
+              status: 'draft'
             });
           }
         }
@@ -2245,38 +2271,63 @@ export default function MajorClassSchedule() {
             start_week: slot.week,
             end_week: slot.week,
             created_at: new Date().toISOString(),
-            status: 'draft' // 标记为草稿状态
+            status: 'draft'
           });
         }
       }
-      // 保存到本地存储
       setProgress(70);
-      // 先读取当前存储数据
-      let currentStorageData = JSON.parse(localStorage.getItem('music_scheduler_scheduled_classes') || '[]');
-      
-      // 删除所有选中班级的现有排课记录，以防冲突
-      let filteredStorageData;
-      if (selectedCourses.length > 1) {
-        // 合班上课：删除所有选中班级的现有排课记录
-        const selectedStatuses = courseScheduleStatuses.filter(status => selectedCourses.includes(status.id));
-        const selectedClassIds = selectedStatuses.map(status => status.class_id);
-        filteredStorageData = currentStorageData.filter((item: any) => 
-          !(item.course_id === currentCourse.course_id && selectedClassIds.includes(item.class_id))
+
+      if (USE_DATABASE) {
+        // 数据库模式：删除当前课程相关旧排课，再写入新排课
+        const targetPairs = new Set<string>();
+
+        if (selectedCourses.length > 1) {
+          const selectedStatuses = courseScheduleStatuses.filter(status => selectedCourses.includes(status.id));
+          selectedStatuses.forEach(status => {
+            targetPairs.add(`${status.course_id}-${status.class_id}`);
+          });
+        } else if (currentCourse) {
+          const classId = selectedClass || currentCourse.class_id;
+          targetPairs.add(`${currentCourse.course_id}-${classId}`);
+        }
+
+        const schedulesToDelete = scheduledClasses.filter((item: any) =>
+          targetPairs.has(`${item.course_id}-${item.class_id}`)
+        );
+
+        for (const sc of schedulesToDelete) {
+          await scheduleService.delete(sc.id);
+        }
+
+        setProgress(80);
+        await scheduleService.createMany(
+          newSchedules.map(s => ({
+            ...s,
+            semester_label: selectedSemesterLabel,
+          }))
         );
       } else {
-        // 单个班级：删除当前课程的现有排课记录
-        filteredStorageData = currentStorageData.filter((item: any) => 
-          item.course_id !== currentCourse.course_id
-        );
+        // 本地存储模式：保留原逻辑
+        let currentStorageData = JSON.parse(localStorage.getItem('music_scheduler_scheduled_classes') || '[]');
+        
+        let filteredStorageData;
+        if (selectedCourses.length > 1) {
+          const selectedStatuses = courseScheduleStatuses.filter(status => selectedCourses.includes(status.id));
+          const selectedClassIds = selectedStatuses.map(status => status.class_id);
+          filteredStorageData = currentStorageData.filter((item: any) => 
+            !(item.course_id === currentCourse.course_id && selectedClassIds.includes(item.class_id))
+          );
+        } else {
+          filteredStorageData = currentStorageData.filter((item: any) => 
+            item.course_id !== currentCourse.course_id
+          );
+        }
+        
+        setProgress(80);
+        const updatedStorageData = [...filteredStorageData, ...newSchedules];
+        setProgress(90);
+        localStorage.setItem('music_scheduler_scheduled_classes', JSON.stringify(updatedStorageData));
       }
-      
-      // 合并新排课记录并保存
-      setProgress(80);
-      const updatedStorageData = [...filteredStorageData, ...newSchedules];
-      setProgress(90);
-      localStorage.setItem('music_scheduler_scheduled_classes', JSON.stringify(updatedStorageData));
-      
-
       
       // 将排课时间添加到禁排时间中（教师、班级、教室）
       setProgress(92);
@@ -2322,7 +2373,7 @@ export default function MajorClassSchedule() {
     } finally {
       setSaving(false);
     }
-  }, [currentCourse, selectedTimeSlots, detectConflicts, rooms, scheduleService, selectedClass, selectedRoom, addScheduleToBlockedTimes]);
+  }, [currentCourse, selectedTimeSlots, detectConflicts, rooms, scheduleService, selectedClass, selectedRoom, addScheduleToBlockedTimes, selectedCourses, courseScheduleStatuses, scheduledClasses, selectedSemesterLabel]);
   
   // 批量排课处理
   const handleBatchSchedule = useCallback(async () => {

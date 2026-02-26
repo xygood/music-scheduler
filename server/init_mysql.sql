@@ -341,6 +341,31 @@ CREATE TABLE IF NOT EXISTS `online_teachers` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='在线教师状态表';
 
 -- =====================================================
+-- 14. 优先级禁排时间表
+-- =====================================================
+CREATE TABLE IF NOT EXISTS `priority_blocked_times` (
+  `id` VARCHAR(100) NOT NULL COMMENT '主键ID',
+  `priority` VARCHAR(20) NOT NULL COMMENT '优先级: high/medium/low',
+  `source` VARCHAR(50) NOT NULL COMMENT '来源: large_class/week_config/major_class/minor_class',
+  `entity_type` VARCHAR(50) NOT NULL COMMENT '实体类型: teacher/student/room/class/system',
+  `entity_id` VARCHAR(100) NOT NULL COMMENT '实体ID',
+  `entity_name` VARCHAR(100) DEFAULT NULL COMMENT '实体名称',
+  `academic_year` VARCHAR(20) DEFAULT NULL COMMENT '学年',
+  `semester_label` VARCHAR(20) DEFAULT NULL COMMENT '学期标签',
+  `start_week` INT DEFAULT NULL COMMENT '开始周次',
+  `end_week` INT DEFAULT NULL COMMENT '结束周次',
+  `day_of_week` INT NOT NULL COMMENT '星期几(1-7)',
+  `start_period` INT NOT NULL COMMENT '开始节次',
+  `end_period` INT NOT NULL COMMENT '结束节次',
+  `reason` VARCHAR(255) DEFAULT NULL COMMENT '禁排原因',
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_entity` (`entity_type`, `entity_id`),
+  KEY `idx_semester` (`academic_year`, `semester_label`),
+  KEY `idx_time` (`day_of_week`, `start_period`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='优先级禁排时间表';
+
+-- =====================================================
 -- 插入默认管理员账号
 -- 密码: 135 (SHA-256哈希)
 -- =====================================================

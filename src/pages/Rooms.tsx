@@ -140,7 +140,8 @@ export default function Rooms() {
         setUploading(false);
       }, 2000);
     } catch (error) {
-      setUploadProgress('导入失败，请检查文件格式');
+      console.error('导入失败:', error);
+      setUploadProgress(`导入失败: ${error instanceof Error ? error.message : '请检查文件格式'}`);
       setUploading(false);
     }
   };

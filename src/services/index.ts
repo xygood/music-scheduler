@@ -86,6 +86,18 @@ export const teacherService = {
   },
 
   async importTeacherRoomsByFaculty(entries: any[]) {
+    if (USE_DATABASE) {
+      const response = await fetch('/api/teachers/import-rooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entries)
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}: Failed to import teacher rooms`);
+      }
+      return response.json();
+    }
     return localStorageService.teacherService.importTeacherRoomsByFaculty(entries);
   }
 };
