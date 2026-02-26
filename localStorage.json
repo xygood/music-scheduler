@@ -1,0 +1,6 @@
+{
+  "music_scheduler_teachers": "[{\"id\":\"t_徐颖_1770029614489\",\"teacher_id\":\"12015417\",\"name\":\"徐颖\",\"faculty_id\":\"INSTRUMENT\",\"faculty_name\":\"器乐教研室\",\"can_teach_instruments\":[\"古筝\"],\"instruments\":[\"古筝\"],\"status\":\"active\",\"created_at\":\"2026-02-02T10:53:34.489Z\"},{\"id\":\"t_邵荣_1770029614500\",\"teacher_id\":\"12015408\",\"name\":\"邵荣\",\"faculty_id\":\"VOCAL\",\"faculty_name\":\"声乐教研室\",\"can_teach_instruments\":[\"声乐\"],\"instruments\":[\"声乐\"],\"status\":\"active\",\"created_at\":\"2026-02-02T10:53:34.500Z\"},{\"id\":\"t_李馨荷_1770029614501\",\"teacher_id\":\"12015773\",\"name\":\"李馨荷\",\"faculty_id\":\"PIANO\",\"faculty_name\":\"钢琴教研室\",\"can_teach_instruments\":[\"钢琴\"],\"instruments\":[\"钢琴\"],\"status\":\"active\",\"created_at\":\"2026-02-02T10:53:34.501Z\"}]",
+  "music_scheduler_students": [],
+  "music_scheduler_classes": [],
+  "music_scheduler_courses": []
+}
