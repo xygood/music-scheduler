@@ -50,6 +50,31 @@ class WebSocketService {
           this.handleBlockedSlotsUpdated(data);
         });
 
+        // 处理排课创建
+        this.socket.on('schedule_created', (data) => {
+          this.handleScheduleCreated(data);
+        });
+
+        // 处理排课更新
+        this.socket.on('schedule_updated', (data) => {
+          this.handleScheduleUpdated(data);
+        });
+
+        // 处理排课删除
+        this.socket.on('schedule_deleted', (data) => {
+          this.handleScheduleDeleted(data);
+        });
+
+        // 处理同步数据
+        this.socket.on('sync_data', (data) => {
+          this.handleSyncData(data);
+        });
+
+        // 处理在线教师更新
+        this.socket.on('online_teachers_update', (data) => {
+          this.handleOnlineTeachersUpdate(data);
+        });
+
       } catch (error) {
         console.error('WebSocket connection failed:', error);
         resolve(false);
@@ -111,6 +136,57 @@ class WebSocketService {
   private handleBlockedSlotsUpdated(slots: any[]) {
     localStorage.setItem(STORAGE_KEYS.BLOCKED_SLOTS, JSON.stringify(slots));
     this.notifyListeners('blocked_slots_updated', slots);
+  }
+
+  // 处理排课创建
+  private handleScheduleCreated(data: any) {
+    console.log('Schedule created:', data);
+    this.notifyListeners('schedule_created', data);
+  }
+
+  // 处理排课更新
+  private handleScheduleUpdated(data: any) {
+    console.log('Schedule updated:', data);
+    this.notifyListeners('schedule_updated', data);
+  }
+
+  // 处理排课删除
+  private handleScheduleDeleted(data: any) {
+    console.log('Schedule deleted:', data);
+    this.notifyListeners('schedule_deleted', data);
+  }
+
+  // 处理同步数据
+  private handleSyncData(data: any) {
+    console.log('Sync data received:', data);
+    this.notifyListeners('sync_data', data);
+  }
+
+  // 处理在线教师更新
+  private handleOnlineTeachersUpdate(data: any) {
+    console.log('Online teachers updated:', data);
+    this.notifyListeners('online_teachers_update', data);
+  }
+
+  // 教师上线
+  teacherOnline(data: { teacher_id: string; teacher_name: string; login_time: number }) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit('teacher_online', data);
+    }
+  }
+
+  // 教师下线
+  teacherOffline(teacherId: string) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit('teacher_offline', { teacher_id: teacherId });
+    }
+  }
+
+  // 获取在线教师列表
+  getOnlineTeachers() {
+    if (this.socket && this.isConnected) {
+      this.socket.emit('get_online_teachers');
+    }
   }
 
   // 添加事件监听器

@@ -457,17 +457,55 @@ export const weekConfigService = {
 export const largeClassScheduleService = {
   async getAll() {
     if (USE_DATABASE) {
-      // 数据库模式下，大课表数据可能存储在 scheduled_classes 表中
-      // 这里返回空数组，因为大课表功能可能不常用
-      return [];
+      return apiService.largeClassScheduleApi.getAll();
     }
     return localStorageService.largeClassScheduleService.getAll();
   },
+  async getBySemester(semesterLabel: string) {
+    if (USE_DATABASE) {
+      const all = await apiService.largeClassScheduleApi.getAll();
+      return all.find((s: any) => s.semester_label === semesterLabel) || null;
+    }
+    return localStorageService.largeClassScheduleService.getBySemester(semesterLabel);
+  },
   async getEntries(semesterLabel?: string) {
     if (USE_DATABASE) {
-      return [];
+      const all = await apiService.largeClassScheduleApi.getAll();
+      let entries: any[] = [];
+      for (const schedule of all) {
+        if (semesterLabel && schedule.semester_label !== semesterLabel) continue;
+        entries = [...entries, ...(schedule.entries || [])];
+      }
+      return entries;
     }
     return localStorageService.largeClassScheduleService.getEntries(semesterLabel);
+  },
+  async importSchedule(fileName: string, academicYear: string, semesterLabel: string, entries: any[]) {
+    if (USE_DATABASE) {
+      return apiService.largeClassScheduleApi.create({
+        file_name: fileName,
+        academic_year: academicYear,
+        semester_label: semesterLabel,
+        entries: entries
+      });
+    }
+    return localStorageService.largeClassScheduleService.importSchedule(fileName, academicYear, semesterLabel, entries);
+  },
+  async delete(id: string) {
+    if (USE_DATABASE) {
+      return apiService.largeClassScheduleApi.delete(id);
+    }
+    return localStorageService.largeClassScheduleService.delete(id);
+  },
+  async clearAll() {
+    if (USE_DATABASE) {
+      const all = await apiService.largeClassScheduleApi.getAll();
+      for (const s of all) {
+        await apiService.largeClassScheduleApi.delete(s.id);
+      }
+      return;
+    }
+    return localStorageService.largeClassScheduleService.clearAll();
   }
 };
 

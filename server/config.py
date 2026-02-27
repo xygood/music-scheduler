@@ -37,18 +37,9 @@ class DevelopmentConfig(Config):
 class ProductionConfig(Config):
     DEBUG = False
     USE_MYSQL = True
-    
-    @property
-    def SECRET_KEY(self):
-        return must_env('SECRET_KEY')
-    
-    @property
-    def MYSQL_PASSWORD(self):
-        return must_env('MYSQL_PASSWORD')
-    
-    @property
-    def SQLALCHEMY_DATABASE_URI(self):
-        return f"mysql+pymysql://{Config.MYSQL_USER}:{self.MYSQL_PASSWORD}@{Config.MYSQL_HOST}:{Config.MYSQL_PORT}/{Config.MYSQL_DATABASE}?charset=utf8mb4"
+    SECRET_KEY = os.environ.get('SECRET_KEY', 'music-scheduler-secret-key-2026')
+    MYSQL_PASSWORD = os.environ.get('MYSQL_PASSWORD', 'Scheduler@2026')
+    SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{os.environ.get('MYSQL_USER', 'scheduler')}:{os.environ.get('MYSQL_PASSWORD', 'Scheduler@2026')}@{os.environ.get('MYSQL_HOST', 'localhost')}:{os.environ.get('MYSQL_PORT', '3306')}/{os.environ.get('MYSQL_DATABASE', 'music_scheduler')}?charset=utf8mb4"
 
 class LocalConfig(Config):
     DEBUG = True

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { authService, operationLogService } from '../services';
+import websocketService from '../services/websocketService';
 import type { Teacher } from '../types';
 
 interface OnlineTeacher {
@@ -108,22 +109,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (isMounted) {
           setUser(currentUser);
           if (currentUser) {
-            // 直接传递 teacher_id，避免状态更新延迟问题
             await refreshTeacher(currentUser.teacher_id);
-            // 将当前用户设置为在线状态（解决刷新页面后在线状态丢失的问题）
-            authService.setTeacherOnline(currentUser);
-            // 直接获取在线教师和已登录用户列表，避免闭包问题
-            try {
-              const teachers = authService.getOnlineTeachers();
-              setOnlineTeachers(teachers);
-            } catch (e) {
-              console.error('获取在线教师列表失败:', e);
-            }
-            try {
-              const users = authService.getLoggedInUsers();
-              setLoggedInUsers(users);
-            } catch (e) {
-              console.error('获取已登录用户列表失败:', e);
+            if (websocketService.getConnectionStatus()) {
+              websocketService.teacherOnline({
+                teacher_id: currentUser.teacher_id,
+                teacher_name: currentUser.full_name,
+                login_time: Date.now()
+              });
             }
           }
         }
@@ -145,56 +137,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // 心跳机制：定期更新教师活动时间
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.teacher_id) return;
 
-    // 立即更新一次
-    authService.updateTeacherActivity(user.id);
-
-    // 每15秒更新一次活动时间（缩短间隔）
     const heartbeatInterval = setInterval(() => {
-      authService.updateTeacherActivity(user.id);
-    }, 15000);
+      if (websocketService.getConnectionStatus()) {
+        websocketService.teacherOnline({
+          teacher_id: user.teacher_id,
+          teacher_name: user.full_name,
+          login_time: Date.now()
+        });
+      }
+    }, 30000);
 
     return () => {
       clearInterval(heartbeatInterval);
     };
-  }, [user?.id]);
+  }, [user?.teacher_id]);
 
-  // 页面可见性监听：当用户切换回页面时更新状态
+  // WebSocket在线教师监听
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && user?.id) {
-        // 用户回到页面，立即更新活动时间
-        authService.updateTeacherActivity(user.id);
-        // 刷新在线教师列表
-        refreshOnlineTeachers();
-      }
+    const handleOnlineTeachersUpdate = (teachers: any[]) => {
+      setOnlineTeachers(teachers);
     };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
+    websocketService.on('online_teachers_update', handleOnlineTeachersUpdate);
+    websocketService.getOnlineTeachers();
+
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      websocketService.off('online_teachers_update', handleOnlineTeachersUpdate);
     };
-  }, [user?.id, refreshOnlineTeachers]);
-
-  // 窗口焦点监听：当窗口获得焦点时更新状态
-  useEffect(() => {
-    const handleFocus = () => {
-      if (user?.id) {
-        // 窗口获得焦点，更新活动时间
-        authService.updateTeacherActivity(user.id);
-        // 刷新在线教师列表
-        refreshOnlineTeachers();
-      }
-    };
-
-    window.addEventListener('focus', handleFocus);
-    
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-    };
-  }, [user?.id, refreshOnlineTeachers]);
+  }, []);
 
   // 定期刷新在线教师列表（每30秒，缩短间隔）
   useEffect(() => {

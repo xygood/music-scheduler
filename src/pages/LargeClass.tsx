@@ -43,10 +43,16 @@ export default function LargeClass() {
     setImportStatus({ type: '', message: '' });
 
     try {
-      // 读取Excel文件
-      const { rawData, sheetName } = await largeClassExcelUtils.readFile(file);
+      if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+        throw new Error('请上传Excel文件（.xlsx或.xls格式）');
+      }
       
-      // 从文件名推断学年和学期
+      const { rawData } = await largeClassExcelUtils.readFile(file);
+      
+      if (!rawData || rawData.length === 0) {
+        throw new Error('Excel文件为空或格式不正确');
+      }
+      
       const fileName = file.name;
       const academicYearMatch = fileName.match(/(\d{4}-\d{4})/);
       const academicYear = academicYearMatch ? academicYearMatch[1] : '2025-2026';
@@ -54,20 +60,16 @@ export default function LargeClass() {
       const semester = semesterMatch ? parseInt(semesterMatch[1]) : 2;
       const semesterLabel = `${academicYear}-${semester}`;
       
-      // 解析大课表数据（使用改进版解析函数）
       const entries = largeClassExcelUtils.parseLargeClassScheduleImproved(rawData, academicYear, semesterLabel);
-      console.log('解析出大课表条目数量:', entries.length);
       
-      // 导入到系统
+      if (entries.length === 0) {
+        throw new Error('未能从Excel中解析出任何课程数据，请检查文件格式是否正确');
+      }
+      
       await largeClassScheduleService.importSchedule(fileName, academicYear, semesterLabel, entries);
-      console.log('大课表导入完成');
 
-      // 刷新大课表数据 - 获取所有大课表条目
       const allLargeClasses = await largeClassScheduleService.getAll();
-      console.log('重新获取到大课表数量:', allLargeClasses.length);
-      
       const allEntries = allLargeClasses.flatMap(s => s.entries);
-      console.log('重新获取到大课表条目总数:', allEntries.length);
       
       setLargeClassEntries(allEntries);
       
@@ -77,9 +79,17 @@ export default function LargeClass() {
       });
     } catch (error) {
       console.error('导入大课表失败:', error);
+      let errorMessage = '导入失败：';
+      if (error instanceof Error) {
+        errorMessage += error.message;
+      } else if (typeof error === 'string') {
+        errorMessage += error;
+      } else {
+        errorMessage += '请确保上传的是正确的课表Excel文件';
+      }
       setImportStatus({
         type: 'error',
-        message: '导入失败：请确保上传的是正确的课表Excel文件'
+        message: errorMessage
       });
     } finally {
       setIsImporting(false);

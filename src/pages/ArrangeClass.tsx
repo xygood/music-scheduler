@@ -344,6 +344,19 @@ export default function ArrangeClass() {
     return coursesList.find(c => c.id === courseId || (c as any).course_id === courseId);
   };
 
+  // 辅助函数：判断排课记录是否为专业大课或理论课（通过course_id关联课程数据判断）
+  const isMajorClassSchedule = (sc: any, coursesList?: any[]): boolean => {
+    const courseList = coursesList || courses;
+    // 通过course_id关联课程数据，判断是否为专业大课
+    const course = courseList?.find ? courseList.find(c => c.id === sc.course_id) : null;
+    return course?.teaching_type === '专业大课' || 
+           course?.teaching_type === '理论课' ||
+           (sc as any).teaching_type === '专业大课' || 
+           (sc as any).course_type === '专业大课' ||
+           (sc as any).teaching_type === '理论课' ||
+           (sc as any).course_type === '理论课';
+  };
+
   // 检查周次是否为全周禁排
   const isWeekFullyBlocked = (week: number, blockedSlots: any[] = [], currentClass?: string): boolean => {
     // 检查是否有明确的全周禁排
@@ -440,11 +453,8 @@ export default function ArrangeClass() {
       return { fullyBlocked: false, partiallyBlocked: false };
     }
 
-    // 直接从本地存储读取专业大课的禁排时间数据
-    const importedBlockedTimes = JSON.parse(localStorage.getItem('music_scheduler_imported_blocked_times') || '[]');
-
-    // 筛选当前班级的禁排数据
-    const classBlockedTimes = importedBlockedTimes.filter((b: any) =>
+    // 从统一的禁排时间列表中获取数据（已从服务器加载）
+    const classBlockedTimes = unifiedBlockedTimes.filter((b: any) =>
       b.class_name && currentClass && b.class_name.includes(currentClass)
     );
 
@@ -488,7 +498,7 @@ export default function ArrangeClass() {
     const partiallyBlocked = !fullyBlocked && dayPeriods.size > 0;
 
     return { fullyBlocked, partiallyBlocked };
-  }, []);
+  }, [unifiedBlockedTimes]);
 
   // 检查周次是否有通适大课禁排（用于周次选择的视觉提示）
   const hasLargeClassInWeek = useCallback((week: number, currentClass?: string): boolean => {
@@ -858,10 +868,9 @@ export default function ArrangeClass() {
           // 检查班级的专业大课禁排时间数据（当有选中学生时）
           if (!isBlocked && groupStudents.length > 0) {
             const allClasses = Array.from(new Set(groupStudents.map(s => s.major_class || s.class_name || '').filter(c => c)));
-            const importedBlockedTimes = JSON.parse(localStorage.getItem('music_scheduler_imported_blocked_times') || '[]');
             
-            if (allClasses.length > 0 && importedBlockedTimes.length > 0) {
-              const allClassesBlockedTimes = importedBlockedTimes.filter((b: any) => {
+            if (allClasses.length > 0 && unifiedBlockedTimes.length > 0) {
+              const allClassesBlockedTimes = unifiedBlockedTimes.filter((b: any) => {
                 const blockedClassName = b.class_name;
                 return blockedClassName && allClasses.some((className: string) =>
                   blockedClassName.includes(className)
@@ -876,6 +885,36 @@ export default function ArrangeClass() {
               });
               
               if (isBlockedByImported) {
+                isBlocked = true;
+              }
+            }
+            
+            // 直接从排课记录中检查班级的专业大课禁排（不依赖localStorage）
+            if (!isBlocked) {
+              const majorClassSchedule = scheduledClasses.find(sc => {
+                // 检查是否为专业大课（通过course_id关联课程数据判断）
+                if (!isMajorClassSchedule(sc)) return false;
+                
+                // 检查班级是否匹配
+                const scClassName = sc.class_id || (sc as any).class_name;
+                if (!scClassName) return false;
+                
+                // 提取班级编号进行匹配（学生班级格式：音乐学2301，排课班级格式：2301）
+                const scClassNumber = scClassName.replace(/[^0-9]/g, ''); // 提取数字部分
+                const classMatches = allClasses.some((className: string) => {
+                  const classNumber = className.replace(/[^0-9]/g, ''); // 提取数字部分
+                  return scClassNumber === classNumber || 
+                         scClassName.includes(className) || 
+                         className.includes(scClassName);
+                });
+                if (!classMatches) return false;
+                
+                // 检查时间是否匹配
+                if (sc.day_of_week !== day + 1 || sc.period !== period + 1) return false;
+                return true;
+              });
+              
+              if (majorClassSchedule) {
                 isBlocked = true;
               }
             }
@@ -917,9 +956,9 @@ export default function ArrangeClass() {
     }
 
     // 检查班级的专业大课禁排时间数据（支持混合小组，检查所有班级）
-    const importedBlockedTimes = JSON.parse(localStorage.getItem('music_scheduler_imported_blocked_times') || '[]');
-    if (allClasses.length > 0 && importedBlockedTimes.length > 0) {
-      const allClassesBlockedTimes = importedBlockedTimes.filter((b: any) => {
+    // 使用统一的禁排时间列表（已从服务器加载）
+    if (allClasses.length > 0 && unifiedBlockedTimes.length > 0) {
+      const allClassesBlockedTimes = unifiedBlockedTimes.filter((b: any) => {
         const blockedClassName = b.class_name;
         return blockedClassName && allClasses.some((className: string) =>
           blockedClassName.includes(className)
@@ -934,6 +973,40 @@ export default function ArrangeClass() {
       });
 
       if (isBlockedByImported) {
+        return false;
+      }
+    }
+
+    // 直接从排课记录中检查班级的专业大课禁排（不依赖localStorage）
+    if (allClasses.length > 0) {
+      const majorClassSchedule = scheduledClasses.find(sc => {
+        // 检查是否为专业大课（通过course_id关联课程数据判断）
+        if (!isMajorClassSchedule(sc)) return false;
+        
+        // 检查班级是否匹配
+        const scClassName = sc.class_id || (sc as any).class_name;
+        if (!scClassName) return false;
+        
+        // 提取班级编号进行匹配（学生班级格式：音乐学2301，排课班级格式：2301）
+        const scClassNumber = scClassName.replace(/[^0-9]/g, ''); // 提取数字部分
+        const classMatches = allClasses.some((className: string) => {
+          const classNumber = className.replace(/[^0-9]/g, ''); // 提取数字部分
+          return scClassNumber === classNumber || 
+                 scClassName.includes(className) || 
+                 className.includes(scClassName);
+        });
+        if (!classMatches) return false;
+        
+        // 检查时间是否匹配
+        if (sc.day_of_week !== day || sc.period !== period) return false;
+        if (sc.start_week !== undefined && sc.end_week !== undefined) {
+          return week >= sc.start_week && week <= sc.end_week;
+        }
+        if (sc.week_number !== undefined) return sc.week_number === week;
+        return week <= 16;
+      });
+      
+      if (majorClassSchedule) {
         return false;
       }
     }
@@ -957,15 +1030,10 @@ export default function ArrangeClass() {
         return false;
       }
 
-      // 检查教师是否有专业大课或理论课
+      // 检查教师是否有专业大课或理论课（通过course_id关联课程数据判断）
       const teacherName = targetTeacher?.name || teacher?.name;
       const teacherMajorClass = scheduledClasses.find(sc => {
-        const isMajorClass = (sc as any).teaching_type === '专业大课' || 
-                            (sc as any).course_type === '专业大课' ||
-                            (sc as any).teaching_type === '理论课' ||
-                            (sc as any).course_type === '理论课' ||
-                            sc.course_name?.includes('专业大课');
-        if (!isMajorClass) return false;
+        if (!isMajorClassSchedule(sc)) return false;
 
         let teacherMatches = false;
         if (sc.teacher_id === effectiveTeacherId) {
@@ -1739,8 +1807,7 @@ export default function ArrangeClass() {
       // 批量创建排课记录（优化：使用createMany减少数据库操作）
       const schedulesToCreate: Array<Omit<ScheduledClass, 'id' | 'created_at'>> = [];
       
-      // 检查禁排时间冲突（一次性获取并缓存）
-      const importedBlockedTimes = JSON.parse(localStorage.getItem('music_scheduler_imported_blocked_times') || '[]');
+      // 检查禁排时间冲突（使用统一的禁排时间列表，已从服务器加载）
       updateProgress(40, 100);
       
       for (const student of groupStudents) {
@@ -1770,7 +1837,7 @@ export default function ArrangeClass() {
 
           // 检查禁排时间冲突
           const studentClass = student.major_class || '';
-          const blockedTimeConflict = importedBlockedTimes.find((bt: any) =>
+          const blockedTimeConflict = unifiedBlockedTimes.find((bt: any) =>
             bt.class_name && studentClass && bt.class_name.includes(studentClass) &&
             bt.weeks && bt.weeks.includes(slot.week) &&
             bt.day === slot.day &&
@@ -3317,6 +3384,37 @@ export default function ArrangeClass() {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [teacher, targetTeacher]);
+
+  // WebSocket实时同步监听
+  useEffect(() => {
+    const handleScheduleCreated = async (data: any) => {
+      console.log('收到新排课:', data);
+      const freshSchedules = await scheduleService.getAll();
+      setAllSchedulesCache(freshSchedules);
+    };
+
+    const handleScheduleUpdated = async (data: any) => {
+      console.log('收到排课更新:', data);
+      const freshSchedules = await scheduleService.getAll();
+      setAllSchedulesCache(freshSchedules);
+    };
+
+    const handleScheduleDeleted = async (data: any) => {
+      console.log('收到排课删除:', data);
+      const freshSchedules = await scheduleService.getAll();
+      setAllSchedulesCache(freshSchedules);
+    };
+
+    websocketService.on('schedule_created', handleScheduleCreated);
+    websocketService.on('schedule_updated', handleScheduleUpdated);
+    websocketService.on('schedule_deleted', handleScheduleDeleted);
+
+    return () => {
+      websocketService.off('schedule_created', handleScheduleCreated);
+      websocketService.off('schedule_updated', handleScheduleUpdated);
+      websocketService.off('schedule_deleted', handleScheduleDeleted);
+    };
+  }, []);
 
   // 根据选中的学生分组，验证分组有效性
   useEffect(() => {
@@ -6619,7 +6717,7 @@ export default function ArrangeClass() {
                           }
                         </td>
                         <td className="px-4 py-2 text-sm text-gray-500 font-mono">{result.groupSize}</td>
-                        <td className="px-4 py-2 text-sm text-gray-500 font-mono whitespace-pre-wrap">{result.scheduleTime || ''}</td>
+                        <td className="px-4 py-2 text-sm text-gray-500 font-mono whitespace-pre-wrap">{result.scheduleTime?.replace(/<br>/g, '\n') || ''}</td>
                         <td className="px-4 py-2 text-sm text-gray-500 font-mono">{result.scheduledHours}</td>
                         <td className="px-4 py-2 text-sm text-gray-500">
                           {(() => {
@@ -6830,13 +6928,8 @@ export default function ArrangeClass() {
     if (!teacherId && !teacherName) return false;
 
     return scheduledClasses.some(sc => {
-      // 检查是否为专业大课或理论课
-      const isMajorClass = (sc as any).teaching_type === '专业大课' || 
-                          (sc as any).course_type === '专业大课' ||
-                          (sc as any).teaching_type === '理论课' ||
-                          (sc as any).course_type === '理论课' ||
-                          sc.course_name?.includes('专业大课');
-      if (!isMajorClass) return false;
+      // 检查是否为专业大课或理论课（通过course_id关联课程数据判断）
+      if (!isMajorClassSchedule(sc)) return false;
 
       // 检查教师是否匹配（支持部分匹配，用于处理"合上"课程）
       let teacherMatches = false;
@@ -7133,8 +7226,7 @@ export default function ArrangeClass() {
         }
 
         // 检查班级的专业大课禁排时间（支持混合小组，检查所有班级）
-        const importedBlockedTimes = JSON.parse(localStorage.getItem('music_scheduler_imported_blocked_times') || '[]');
-        const allClassesBlockedTimes = importedBlockedTimes.filter((b: any) => {
+        const allClassesBlockedTimes = unifiedBlockedTimes.filter((b: any) => {
           const blockedClassName = b.class_name;
           return blockedClassName && allClasses.some((className: string) =>
             blockedClassName.includes(className)
@@ -7251,8 +7343,7 @@ export default function ArrangeClass() {
       }
 
       // 检查班级的专业大课禁排时间数据（支持混合小组，检查所有班级）
-      const importedBlockedTimes = JSON.parse(localStorage.getItem('music_scheduler_imported_blocked_times') || '[]');
-      const allClassesBlockedTimes = importedBlockedTimes.filter((b: any) => {
+      const allClassesBlockedTimes = unifiedBlockedTimes.filter((b: any) => {
         const blockedClassName = b.class_name;
         return blockedClassName && allClasses.some((className: string) =>
           blockedClassName.includes(className)

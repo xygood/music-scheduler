@@ -7,6 +7,7 @@ import json
 
 socketio = None
 connected_users = {}
+online_teachers = {}
 
 def init_socketio(app):
     global socketio
@@ -23,7 +24,10 @@ def init_socketio(app):
         for user_id, sid in list(connected_users.items()):
             if sid == request.sid:
                 del connected_users[user_id]
+                if user_id in online_teachers:
+                    del online_teachers[user_id]
                 break
+        broadcast_online_teachers()
     
     @socketio.on('join_room')
     def handle_join_room(data):
@@ -52,7 +56,36 @@ def init_socketio(app):
         finally:
             db.close()
     
+    @socketio.on('teacher_online')
+    def handle_teacher_online(data):
+        teacher_id = data.get('teacher_id')
+        teacher_name = data.get('teacher_name')
+        if teacher_id:
+            online_teachers[teacher_id] = {
+                'teacher_id': teacher_id,
+                'teacher_name': teacher_name,
+                'login_time': data.get('login_time'),
+                'last_activity': data.get('login_time')
+            }
+            connected_users[teacher_id] = request.sid
+            broadcast_online_teachers()
+    
+    @socketio.on('teacher_offline')
+    def handle_teacher_offline(data):
+        teacher_id = data.get('teacher_id')
+        if teacher_id and teacher_id in online_teachers:
+            del online_teachers[teacher_id]
+        broadcast_online_teachers()
+    
+    @socketio.on('get_online_teachers')
+    def handle_get_online_teachers():
+        emit('online_teachers_update', list(online_teachers.values()))
+    
     return socketio
+
+def broadcast_online_teachers():
+    if socketio:
+        socketio.emit('online_teachers_update', list(online_teachers.values()))
 
 def broadcast_schedule_created(schedule_data):
     if socketio:

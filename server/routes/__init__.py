@@ -28,3 +28,4 @@ from . import classes
 from . import auth
 from . import sync
 from . import semester_configs
+from . import large_class_schedules
