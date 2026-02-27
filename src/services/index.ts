@@ -540,7 +540,27 @@ export const syncService = {
 
   async import(data: any) {
     if (USE_DATABASE) {
-      return apiService.syncApi.import(data);
+      // 确保所有数据类型都传递到后端
+      const importData = {
+        teachers: data.teachers,
+        students: data.students,
+        courses: data.courses,
+        rooms: data.rooms,
+        schedules: data.schedules,
+        major_class_scheduled_classes: data.major_class_scheduled_classes,
+        group_class_scheduled_classes: data.group_class_scheduled_classes,
+        blocked_slots: data.blocked_slots,
+        classes: data.classes,
+        semester_week_configs: data.semester_week_configs,
+        student_teacher_assignments: data.student_teacher_assignments,
+        users: data.users,
+        large_class_schedules: data.large_class_schedules,
+        // 以下数据在数据库模式下可能不需要单独导入
+        conflicts: data.conflicts,
+        imported_blocked_times: data.imported_blocked_times,
+        student_major_assignments: data.student_major_assignments,
+      };
+      return apiService.syncApi.import(importData);
     }
     if (data.teachers) {
       await localStorageService.teacherService.importManyWithUpsert(data.teachers);
