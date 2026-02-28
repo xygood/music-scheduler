@@ -1,12 +1,15 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useNotification } from '../contexts/NotificationContext';
+import { useBlockedTime } from '../contexts/BlockedTimeContext';
 import { EnhancedStatsPanel } from '../components/EnhancedStatsPanel';
 import { DetailedInstrumentStats } from '../components/DetailedInstrumentStats';
+import BlockedTimesImport from '../components/BlockedTimesImport';
+import BlockedTimesList from '../components/BlockedTimesList';
 import { studentService, courseService, roomService, scheduleService, classService, teacherService, studentTeacherAssignmentService } from '../services';
 import { INSTRUMENT_TO_FACULTY } from '../types';
 import {
-  Users, BookOpen, MapPin, Calendar, TrendingUp, Clock, Music, 
+  Users, BookOpen, MapPin, Calendar, TrendingUp, Clock, Music,
   Settings, BarChart, GraduationCap, BarChart3,
   Plus, Zap, AlertCircle, CheckCircle, Activity,
   Eye, EyeOff, Grid, LineChart, RefreshCw, Building, Award,
@@ -105,6 +108,7 @@ interface TeacherGroupClassStats {
 export default function AdminDashboard() {
   const { user, teacher, isAdmin } = useAuth();
   const { showInfo } = useNotification();
+  const { allData: blockedTimesData, refreshBlockedTimes, hasLoaded: blockedTimesLoaded, isLoading: blockedTimesLoading } = useBlockedTime();
   
   // 核心状态
   const [coreStats, setCoreStats] = useState<CoreStats>({
@@ -345,7 +349,11 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     loadCoreStats();
+    // 禁排数据现在由 BlockedTimeProvider 自动加载
+    // 如果缓存中没有数据，Provider 会自动从服务器加载
   }, []);
+
+
 
 
 
@@ -878,6 +886,8 @@ export default function AdminDashboard() {
 
         {/* 控制按钮已移除 */}
       </div>
+
+
 
       {/* 核心指标卡片 */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
@@ -2105,6 +2115,38 @@ export default function AdminDashboard() {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* 禁排时间管理模块 */}
+      {isAdmin && (
+        <div className="mt-8">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-purple-600" />
+              <h3 className="text-lg font-semibold text-gray-900">禁排时间管理</h3>
+            </div>
+            <div className="flex items-center gap-2">
+              {blockedTimesLoaded && (
+                <span className="text-sm text-green-600 flex items-center gap-1">
+                  <CheckCircle className="w-4 h-4" />
+                  数据已缓存 ({blockedTimesData.length} 条)
+                </span>
+              )}
+              <button
+                onClick={refreshBlockedTimes}
+                disabled={blockedTimesLoading}
+                className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 mr-1 ${blockedTimesLoading ? 'animate-spin' : ''}`} />
+                刷新数据
+              </button>
+            </div>
+          </div>
+          <BlockedTimesImport />
+          <div className="mt-4">
+            <BlockedTimesList />
+          </div>
         </div>
       )}
     </div>

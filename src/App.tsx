@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { BlockedTimeProvider, useBlockedTime } from './contexts/BlockedTimeContext';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import AdminDashboard from './pages/AdminDashboard';
@@ -30,30 +31,72 @@ import CourseScheduleStats from './pages/CourseScheduleStats';
 import LargeClass from './pages/LargeClass';
 import OperationLogs from './pages/OperationLogs';
 
-import { dataManagementService } from './services';
-// import { initializeTestData } from './utils/testDataGenerator';
 import './index.css';
 
-// 应用初始化组件
+// 应用初始化组件 - 强制预加载禁排数据
 function AppInitializer({ children }: { children: React.ReactNode }) {
-  React.useEffect(() => {
+  const { user } = useAuth();
+  const { refreshBlockedTimes, isLoading } = useBlockedTime();
+  const [hasAttemptedLoad, setHasAttemptedLoad] = React.useState(false);
+
+  useEffect(() => {
     // 应用启动时初始化默认数据
     const initializeApp = async () => {
       try {
-        // 暂时跳过初始化测试数据，避免自动添加默认班级
-        // await initializeTestData();
-        
-        console.log('跳过数据初始化，直接使用应用');
-        // await dataManagementService.initializeDefaultData();
-        console.log('应用数据初始化完成');
+        console.log('应用启动，检查禁排数据缓存...');
       } catch (error) {
-        console.log('应用数据初始化跳过（临时修复）:', error.message);
+        console.log('应用初始化:', error);
       }
     };
-    
+
     initializeApp();
   }, []);
-  
+
+  // 用户登录后强制预加载禁排数据（无论是否有缓存，都确保数据最新）
+  useEffect(() => {
+    const loadData = async () => {
+      if (user && !hasAttemptedLoad) {
+        setHasAttemptedLoad(true);
+        
+        // 检查是否已经有数据在 localStorage
+        const legacyCache = localStorage.getItem('music_scheduler_imported_blocked_times');
+        const newCache = localStorage.getItem('blockedTimesCache');
+        
+        if (!legacyCache || !newCache) {
+          // 如果任一缓存不存在，强制从服务器加载
+          console.log('禁排数据缓存不完整，强制从服务器加载...');
+          try {
+            await refreshBlockedTimes();
+            console.log('禁排数据已强制加载完成');
+          } catch (error) {
+            console.error('禁排数据加载失败:', error);
+          }
+        } else {
+          console.log('禁排数据缓存已存在');
+        }
+      }
+    };
+
+    loadData();
+    // 注意：只在 user 变化时执行，避免重复加载
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  // 显示全局加载提示
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 shadow-xl">
+          <div className="flex items-center gap-3">
+            <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-gray-800">正在加载禁排时间数据...</span>
+          </div>
+          <p className="text-sm text-gray-500 mt-2">首次加载需要几秒钟，请耐心等待</p>
+        </div>
+      </div>
+    );
+  }
+
   return <>{children}</>;
 }
 
@@ -132,9 +175,11 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <NotificationProvider>
-          <AppInitializer>
-            <AppRoutes />
-          </AppInitializer>
+          <BlockedTimeProvider>
+            <AppInitializer>
+              <AppRoutes />
+            </AppInitializer>
+          </BlockedTimeProvider>
         </NotificationProvider>
       </AuthProvider>
     </BrowserRouter>
