@@ -79,7 +79,8 @@ export const authService = {
       return response;
     } catch (error) {
       console.error('Get teacher profile failed:', error);
-      return user;
+      // 降级为 user 时，用工号作为 id，避免下游用 user.id(UUID) 调教师接口导致 404
+      return { ...user, id: user.teacher_id, teacher_id: user.teacher_id } as any;
     }
   },
 

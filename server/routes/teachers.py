@@ -23,6 +23,32 @@ def get_teacher(teacher_id):
             (Teacher.teacher_id == teacher_id) | (Teacher.id == teacher_id)
         ).first()
         if not teacher:
+            # 管理员账号 110 可能仅有 User 无 Teacher 记录，返回最小 stub 避免前端 404 导致页面无法加载
+            if teacher_id == '110':
+                return jsonify({
+                    'id': '110',
+                    'teacher_id': '110',
+                    'name': '管理员',
+                    'full_name': '管理员',
+                    'email': None,
+                    'phone': None,
+                    'department': None,
+                    'faculty_id': 'ADMIN',
+                    'faculty_code': 'ADMIN',
+                    'faculty_name': None,
+                    'position': None,
+                    'hire_date': None,
+                    'status': 'active',
+                    'primary_instrument': None,
+                    'can_teach_instruments': [],
+                    'max_students_per_class': 5,
+                    'fixed_room_id': None,
+                    'fixed_rooms': [],
+                    'qualifications': [],
+                    'remarks': None,
+                    'created_at': None,
+                    'updated_at': None
+                })
             return jsonify({'error': 'Teacher not found'}), 404
         return jsonify(teacher.to_dict())
     finally:

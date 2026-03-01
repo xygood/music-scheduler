@@ -88,8 +88,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await refreshTeacher(switchedUser.teacher_id);
         refreshOnlineTeachers();
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('切换用户失败:', err);
+      // 如果切换失败（用户不在列表中），清除当前用户并刷新页面
+      if (err.message?.includes('User not found')) {
+        await signOut();
+        window.location.reload();
+      }
     }
   };
 
@@ -208,8 +213,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const response = await authService.signUp(email, password, fullName, facultyCode, specialty);
       setUser(response.user);
-      // 直接传递 userId，避免状态更新延迟问题
-      await refreshTeacher(response.user.id);
+      // 使用 teacher_id（工号）拉取教师信息，避免用 user.id(UUID) 导致 404
+      await refreshTeacher(response.user.teacher_id);
       // 强制结束加载状态
       setLoading(false);
     } catch (err: any) {
