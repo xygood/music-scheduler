@@ -33,57 +33,62 @@ import OperationLogs from './pages/OperationLogs';
 
 import './index.css';
 
-// 应用初始化组件 - 强制预加载禁排数据
+// 应用初始化组件 - 仅登录后首次检查/加载禁排，不阻塞后续排课页的刷新
 function AppInitializer({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const { refreshBlockedTimes, isLoading } = useBlockedTime();
-  const [hasAttemptedLoad, setHasAttemptedLoad] = React.useState(false);
+  const loadAttemptedRef = React.useRef(false);
+  // 仅表示「登录后首次加载」期间显示全屏遮罩，避免排课页调用 refreshBlockedTimes 时整站被挡
+  const [isFirstLoad, setIsFirstLoad] = React.useState(false);
 
   useEffect(() => {
-    // 应用启动时初始化默认数据
-    const initializeApp = async () => {
-      try {
-        console.log('应用启动，检查禁排数据缓存...');
-      } catch (error) {
-        console.log('应用初始化:', error);
-      }
-    };
-
-    initializeApp();
+    console.log('AppInitializer 挂载，当前用户:', user ? '已登录' : '未登录');
   }, []);
 
-  // 用户登录后强制预加载禁排数据（无论是否有缓存，都确保数据最新）
   useEffect(() => {
     const loadData = async () => {
-      if (user && !hasAttemptedLoad) {
-        setHasAttemptedLoad(true);
-        
-        // 检查是否已经有数据在 localStorage
+      if (user && !loadAttemptedRef.current) {
+        loadAttemptedRef.current = true;
+
+        console.log('用户已登录，开始检查禁排数据缓存...');
         const legacyCache = localStorage.getItem('music_scheduler_imported_blocked_times');
         const newCache = localStorage.getItem('blockedTimesCache');
-        
-        if (!legacyCache || !newCache) {
-          // 如果任一缓存不存在，强制从服务器加载
-          console.log('禁排数据缓存不完整，强制从服务器加载...');
+
+        let newCacheDataCount = 0;
+        if (newCache) {
+          try {
+            const parsed = JSON.parse(newCache);
+            newCacheDataCount = parsed.data?.length || 0;
+          } catch (e) {
+            console.log('新缓存解析失败');
+          }
+        }
+
+        const hasLegacyData = legacyCache && legacyCache !== '[]' && legacyCache !== '';
+        const hasNewData = newCache && newCache !== '' && newCacheDataCount > 0;
+
+        if (!hasLegacyData || !hasNewData) {
+          console.log('禁排数据缓存不完整或为空，从服务器加载...');
+          setIsFirstLoad(true);
           try {
             await refreshBlockedTimes();
-            console.log('禁排数据已强制加载完成');
+            console.log('禁排数据已加载完成');
           } catch (error) {
             console.error('禁排数据加载失败:', error);
+          } finally {
+            setIsFirstLoad(false);
           }
         } else {
-          console.log('禁排数据缓存已存在');
+          console.log('禁排数据缓存已存在，无需加载');
         }
       }
     };
 
     loadData();
-    // 注意：只在 user 变化时执行，避免重复加载
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, refreshBlockedTimes]);
 
-  // 显示全局加载提示
-  if (isLoading) {
+  // 仅登录后首次加载禁排时显示全屏遮罩；排课页内的 refreshBlockedTimes 不再触发整站遮罩
+  if (isFirstLoad && isLoading) {
     return (
       <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
         <div className="bg-white rounded-lg p-6 shadow-xl">

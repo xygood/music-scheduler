@@ -86,18 +86,6 @@ export const teacherService = {
   },
 
   async importTeacherRoomsByFaculty(entries: any[]) {
-    if (USE_DATABASE) {
-      const response = await fetch('/api/teachers/import-rooms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(entries)
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP ${response.status}: Failed to import teacher rooms`);
-      }
-      return response.json();
-    }
     return localStorageService.teacherService.importTeacherRoomsByFaculty(entries);
   }
 };
@@ -266,6 +254,17 @@ export const scheduleService = {
       return apiService.schedulesApi.delete(id);
     }
     return localStorageService.scheduleService.delete(id);
+  },
+
+  async deleteMany(ids: string[]) {
+    if (USE_DATABASE) {
+      if (ids.length === 0) return { deleted: 0, ids: [] };
+      return apiService.schedulesApi.deleteMany(ids);
+    }
+    for (const id of ids) {
+      await localStorageService.scheduleService.delete(id);
+    }
+    return { deleted: ids.length, ids };
   },
 
   async getByTeacher(teacherId: string, startDate?: string, endDate?: string) {
@@ -461,52 +460,45 @@ export const largeClassScheduleService = {
     }
     return localStorageService.largeClassScheduleService.getAll();
   },
-  async getBySemester(semesterLabel: string) {
-    if (USE_DATABASE) {
-      const all = await apiService.largeClassScheduleApi.getAll();
-      return all.find((s: any) => s.semester_label === semesterLabel) || null;
-    }
-    return localStorageService.largeClassScheduleService.getBySemester(semesterLabel);
-  },
   async getEntries(semesterLabel?: string) {
     if (USE_DATABASE) {
       const all = await apiService.largeClassScheduleApi.getAll();
-      let entries: any[] = [];
-      for (const schedule of all) {
-        if (semesterLabel && schedule.semester_label !== semesterLabel) continue;
-        entries = [...entries, ...(schedule.entries || [])];
+      const entries: any[] = [];
+      for (const s of all) {
+        if (semesterLabel && s.semester_label !== semesterLabel) continue;
+        entries.push(...(s.entries || []));
       }
       return entries;
     }
     return localStorageService.largeClassScheduleService.getEntries(semesterLabel);
   },
-  async importSchedule(fileName: string, academicYear: string, semesterLabel: string, entries: any[]) {
+  async importSchedule(
+    fileName: string,
+    academicYear: string,
+    semesterLabel: string,
+    entries: any[]
+  ) {
     if (USE_DATABASE) {
       return apiService.largeClassScheduleApi.create({
         file_name: fileName,
         academic_year: academicYear,
         semester_label: semesterLabel,
-        entries: entries
+        entries,
       });
     }
-    return localStorageService.largeClassScheduleService.importSchedule(fileName, academicYear, semesterLabel, entries);
-  },
-  async delete(id: string) {
-    if (USE_DATABASE) {
-      return apiService.largeClassScheduleApi.delete(id);
-    }
-    return localStorageService.largeClassScheduleService.delete(id);
+    return localStorageService.largeClassScheduleService.importSchedule(
+      fileName,
+      academicYear,
+      semesterLabel,
+      entries
+    );
   },
   async clearAll() {
     if (USE_DATABASE) {
-      const all = await apiService.largeClassScheduleApi.getAll();
-      for (const s of all) {
-        await apiService.largeClassScheduleApi.delete(s.id);
-      }
-      return;
+      return apiService.largeClassScheduleApi.clearAll();
     }
     return localStorageService.largeClassScheduleService.clearAll();
-  }
+  },
 };
 
 export const studentTeacherAssignmentService = {
@@ -540,27 +532,7 @@ export const syncService = {
 
   async import(data: any) {
     if (USE_DATABASE) {
-      // 确保所有数据类型都传递到后端
-      const importData = {
-        teachers: data.teachers,
-        students: data.students,
-        courses: data.courses,
-        rooms: data.rooms,
-        schedules: data.schedules,
-        major_class_scheduled_classes: data.major_class_scheduled_classes,
-        group_class_scheduled_classes: data.group_class_scheduled_classes,
-        blocked_slots: data.blocked_slots,
-        classes: data.classes,
-        semester_week_configs: data.semester_week_configs,
-        student_teacher_assignments: data.student_teacher_assignments,
-        users: data.users,
-        large_class_schedules: data.large_class_schedules,
-        // 以下数据在数据库模式下可能不需要单独导入
-        conflicts: data.conflicts,
-        imported_blocked_times: data.imported_blocked_times,
-        student_major_assignments: data.student_major_assignments,
-      };
-      return apiService.syncApi.import(importData);
+      return apiService.syncApi.import(data);
     }
     if (data.teachers) {
       await localStorageService.teacherService.importManyWithUpsert(data.teachers);

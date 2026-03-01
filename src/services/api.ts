@@ -26,8 +26,17 @@ const fetchWithAuth = async <T>(
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(error.error || `HTTP error! status: ${response.status}`);
+    let errorMessage = `HTTP ${response.status}`;
+    const text = await response.text();
+    if (text) {
+      try {
+        const body = JSON.parse(text);
+        errorMessage = body.error || body.message || errorMessage;
+      } catch {
+        if (text.length < 200) errorMessage = text;
+      }
+    }
+    throw new Error(errorMessage);
   }
 
   return response.json();
@@ -105,6 +114,7 @@ export const schedulesApi = {
   create: (data: any) => api.post<any>('/schedules', data),
   update: (id: string, data: any) => api.put<any>(`/schedules/${id}`, data),
   delete: (id: string) => api.delete(`/schedules/${id}`),
+  deleteMany: (ids: string[]) => api.post<{ deleted: number; ids: string[] }>('/schedules/batch-delete', { ids }),
   batchCreate: (schedules: any[]) => api.post<any[]>('/schedules/batch', { schedules }),
 };
 
@@ -123,6 +133,7 @@ export const largeClassScheduleApi = {
   create: (data: any) => api.post<any>('/large-class-schedules', data),
   update: (id: string, data: any) => api.put<any>(`/large-class-schedules/${id}`, data),
   delete: (id: string) => api.delete(`/large-class-schedules/${id}`),
+  clearAll: () => api.post<{ message: string }>('/large-class-schedules/clear', {}),
 };
 
 export const classesApi = {

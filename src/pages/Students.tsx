@@ -67,6 +67,7 @@ export default function Students() {
     student_id: '',
     name: '',
     major_class: '',
+    grade: '',
     student_type: 'general' as 'general' | 'upgrade',
     primary_instrument: '',
     secondary_instruments: [] as string[],
@@ -76,6 +77,7 @@ export default function Students() {
     student_id: '',
     name: '',
     major_class: '',
+    grade: '',
     student_type: 'general' as 'general' | 'upgrade',
     primary_instrument: '',
     secondary_instruments: [] as string[],
@@ -517,23 +519,19 @@ export default function Students() {
     e.preventDefault();
     if (!user) return;
     try {
-      // 从专业班级提取入学年份
-      const majorClass = formData.major_class;
-      const yearMatch = majorClass.match(/(\d{4})/);
-      const enrollmentYear = yearMatch ? parseInt(yearMatch[1]) : new Date().getFullYear();
+      // 年级：从输入文本解析数字（如 "2025级" -> 2025），保存为后端 grade 字段
+      const gradeStr = String(formData.grade || '').trim();
+      const gradeNum = parseGradeFromInput(gradeStr);
 
-      // 根据主项专业确定教研室代码
       const primaryInst = formData.primary_instrument;
       const facultyCode = primaryInst === '钢琴' ? 'PIANO' : primaryInst === '声乐' ? 'VOCAL' : primaryInst ? 'INSTRUMENT' : '';
 
-      // 统一数据格式（与导入保持一致）
       await studentService.create({
         teacher_id: user.id,
         student_id: formData.student_id,
         name: formData.name,
         major_class: formData.major_class,
-        grade: enrollmentYear,
-        enrollment_year: enrollmentYear,
+        grade: gradeNum,
         student_type: formData.student_type,
         primary_instrument: formData.primary_instrument,
         secondary_instruments: formData.secondary_instruments,
@@ -544,7 +542,7 @@ export default function Students() {
 
       showSuccess('添加成功', '学生信息已成功保存');
       setShowModal(false);
-      setFormData({ student_id: '', name: '', major_class: '', student_type: 'general', primary_instrument: '', secondary_instruments: [], remarks: '' });
+      setFormData({ student_id: '', name: '', major_class: '', grade: '', student_type: 'general', primary_instrument: '', secondary_instruments: [], remarks: '' });
       
       const data = await studentService.getAll();
       // 为学生数据添加序号，并确保2304班级的学生类型为专升本
@@ -606,12 +604,14 @@ export default function Students() {
   // 打开编辑弹窗
   const handleEdit = (student: Student) => {
     setEditingStudent(student);
-    // 专升本学生主项专业默认为空（无）
     const isUpgrade = student.student_type === 'upgrade' || student.major_class?.includes('2304');
+    const g = (student as any).grade;
+    const gradeDisplay = g != null && g !== '' ? (typeof g === 'number' ? `${g}级` : String(g)) : '';
     setEditFormData({
       student_id: student.student_id,
       name: student.name,
       major_class: student.major_class || '',
+      grade: gradeDisplay,
       student_type: student.student_type || 'general',
       primary_instrument: isUpgrade ? '' : (student.primary_instrument || ''),
       secondary_instruments: student.secondary_instruments || [],
@@ -619,29 +619,33 @@ export default function Students() {
     });
   };
 
-  // 保存编辑后的学生信息
+  // 从年级输入解析为数字（如 "2025级"、"2025" -> 2025；"25" -> 2025）
+  const parseGradeFromInput = (input: string): number => {
+    const s = String(input || '').replace(/\s/g, '');
+    const digits = s.replace(/\D/g, '');
+    if (!digits) return new Date().getFullYear();
+    const num = parseInt(digits, 10);
+    if (digits.length <= 2) return 2000 + num; // 25 -> 2025
+    return num;
+  };
+
+  // 保存编辑后的学生信息（使用表单中输入的年级，不再从班级推导）
   const handleUpdateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStudent) return;
 
     try {
-      // 从专业班级提取入学年份
-      const majorClass = editFormData.major_class;
-      const yearMatch = majorClass.match(/(\d{4})/);
-      const enrollmentYear = yearMatch ? parseInt(yearMatch[1]) : new Date().getFullYear();
-      const gradeNum = enrollmentYear;
+      // 年级：使用表单输入的文本解析为数字保存
+      const gradeNum = parseGradeFromInput(editFormData.grade);
 
-      // 根据主项专业确定教研室代码
       const primaryInst = editFormData.primary_instrument;
       const facultyCode = primaryInst === '钢琴' ? 'PIANO' : primaryInst === '声乐' ? 'VOCAL' : primaryInst ? 'INSTRUMENT' : '';
 
-      // 统一数据格式（与添加和导入保持一致）
       await studentService.update(editingStudent.id, {
         student_id: editFormData.student_id,
         name: editFormData.name,
         major_class: editFormData.major_class,
         grade: gradeNum,
-        enrollment_year: enrollmentYear,
         student_type: editFormData.student_type,
         primary_instrument: editFormData.primary_instrument,
         secondary_instruments: editFormData.secondary_instruments,
@@ -967,7 +971,7 @@ export default function Students() {
             {uploading ? '导入中...' : '导入'}
           </button>
           <button onClick={handleExport} className="btn-secondary flex items-center gap-1 px-3 py-1.5 text-xs"><Download className="w-3 h-3" />导出</button>
-          <button onClick={() => { setFormData({ student_id: '', name: '', major_class: '', student_type: 'general', primary_instrument: '', secondary_instruments: [], remarks: '' }); setShowModal(true); }} className="btn-primary flex items-center gap-1 px-3 py-1.5 text-xs"><Plus className="w-3 h-3" />添加学生</button>
+          <button onClick={() => { setFormData({ student_id: '', name: '', major_class: '', grade: new Date().getFullYear(), student_type: 'general', primary_instrument: '', secondary_instruments: [], remarks: '' }); setShowModal(true); }} className="btn-primary flex items-center gap-1 px-3 py-1.5 text-xs"><Plus className="w-3 h-3" />添加学生</button>
         </div>
       </div>
 
@@ -1117,6 +1121,30 @@ export default function Students() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">年级</label>
+                  <input
+                    type="text"
+                    value={formData.grade}
+                    onChange={(e) => setFormData({ ...formData, grade: e.target.value })}
+                    className="input"
+                    placeholder="如：2025级"
+                  />
+                </div>
+                <div>
+                  <label className="label">学生类型</label>
+                  <select
+                    value={formData.student_type}
+                    onChange={(e) => setFormData({ ...formData, student_type: e.target.value as 'general' | 'upgrade' })}
+                    className="input"
+                  >
+                    <option value="general">普通班</option>
+                    <option value="upgrade">专升本</option>
+                  </select>
+                </div>
+              </div>
+
               <div>
                 <label className="label">专业班级</label>
                 <input
@@ -1130,7 +1158,7 @@ export default function Students() {
               </div>
 
               <div>
-                <label className="label">学生类型</label>
+                <label className="label">主项专业</label>
                 <select
                   value={formData.student_type}
                   onChange={(e) => setFormData({ ...formData, student_type: e.target.value as 'general' | 'upgrade' })}
@@ -1233,6 +1261,30 @@ export default function Students() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">年级</label>
+                  <input
+                    type="text"
+                    value={editFormData.grade}
+                    onChange={(e) => setEditFormData({ ...editFormData, grade: e.target.value })}
+                    className="input"
+                    placeholder="如：2025级"
+                  />
+                </div>
+                <div>
+                  <label className="label">学生类型</label>
+                  <select
+                    value={editFormData.student_type}
+                    onChange={(e) => setEditFormData({ ...editFormData, student_type: e.target.value as 'general' | 'upgrade' })}
+                    className="input"
+                  >
+                    <option value="general">普通班</option>
+                    <option value="upgrade">专升本</option>
+                  </select>
+                </div>
+              </div>
+
               <div>
                 <label className="label">专业班级</label>
                 <input
@@ -1246,7 +1298,7 @@ export default function Students() {
               </div>
 
               <div>
-                <label className="label">学生类型</label>
+                <label className="label">主项专业</label>
                 <select
                   value={editFormData.student_type}
                   onChange={(e) => setEditFormData({ ...editFormData, student_type: e.target.value as 'general' | 'upgrade' })}
